@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -45,8 +46,6 @@ function setup(content: string) {
       useNoteOperations({
         noteId: note.id,
         getContent: () => content,
-        save: async () => true,
-        isDirty: () => false,
         notify,
       }),
     { wrapper },

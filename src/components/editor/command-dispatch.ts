@@ -42,6 +42,18 @@ export type CommandContext = {
   workspace: WorkspaceOps;
 };
 
+export type DeleteMode = "archive" | "purge";
+
+/**
+ * The archive-vs-delete policy, in the command layer: an empty buffer is
+ * purged (there is nothing worth archiving), as is any buffer the user
+ * forces with `:delete!`. Everything else is archived. Lives here so the
+ * policy is verified by the command suite, not inside a component.
+ */
+export function resolveDeleteMode(hard: boolean, content: string): DeleteMode {
+  return hard || content.trim().length === 0 ? "purge" : "archive";
+}
+
 /**
  * RbNotes' commands (`:w`, `:q`, `:new`, `:rename`, `:delete`, `:share`,
  * app-level `:set` options...) are dispatched here directly, rather than

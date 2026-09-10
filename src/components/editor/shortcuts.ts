@@ -1,22 +1,26 @@
 import type { VimMode } from "@/lib/store";
 
-/** The app-level actions a global shortcut can ask for. */
-export type Intent =
-  | { type: "save" }
-  | { type: "newNote" }
-  | { type: "openQuickSwitcher" }
-  | { type: "openSearch" }
-  | { type: "toggleSidebar" }
-  | { type: "openCommandDock" };
-
-export type IntentHandlers = {
-  save: () => void;
-  newNote: () => void;
-  openQuickSwitcher: () => void;
-  openSearch: () => void;
-  toggleSidebar: () => void;
-  openCommandDock: () => void;
+/**
+ * The intent set, declared once. `Intent`, `IntentHandlers`, and
+ * `dispatchIntent` all derive from this map, so adding an intent is a
+ * single-line change here (plus its row and its handler), not edits in
+ * three parallel type declarations.
+ */
+export type IntentMap = {
+  save: true;
+  newNote: true;
+  openQuickSwitcher: true;
+  openSearch: true;
+  toggleSidebar: true;
+  openCommandDock: true;
 };
+
+type IntentType = keyof IntentMap;
+
+/** The app-level actions a global shortcut can ask for. */
+export type Intent = { [K in IntentType]: { type: K } }[IntentType];
+
+export type IntentHandlers = { [K in IntentType]: () => void };
 
 /**
  * The one table of global shortcuts. Both key listeners -- the editor's
@@ -35,6 +39,12 @@ export type GlobalShortcut = {
   ctrl: boolean;
   /** Vim modes the shortcut is legal in; empty means any mode (and no mode). */
   modes: VimMode[];
+  /**
+   * Whether this row belongs in the help buffer's GLOBAL section. Explicit
+   * so a new global row can never silently fail to appear; editor-only rows
+   * (the ':') are listed in their own mode section instead.
+   */
+  inGlobalHelp: boolean;
   intent: Intent;
 };
 
@@ -46,6 +56,7 @@ export const GLOBAL_SHORTCUTS: GlobalShortcut[] = [
     key: "s",
     ctrl: true,
     modes: [],
+    inGlobalHelp: true,
     intent: { type: "save" },
   },
   {
@@ -55,6 +66,7 @@ export const GLOBAL_SHORTCUTS: GlobalShortcut[] = [
     key: "n",
     ctrl: true,
     modes: [],
+    inGlobalHelp: true,
     intent: { type: "newNote" },
   },
   {
@@ -64,6 +76,7 @@ export const GLOBAL_SHORTCUTS: GlobalShortcut[] = [
     key: "p",
     ctrl: true,
     modes: [],
+    inGlobalHelp: true,
     intent: { type: "openQuickSwitcher" },
   },
   {
@@ -73,6 +86,7 @@ export const GLOBAL_SHORTCUTS: GlobalShortcut[] = [
     key: "b",
     ctrl: true,
     modes: [],
+    inGlobalHelp: true,
     intent: { type: "toggleSidebar" },
   },
   {
@@ -82,6 +96,7 @@ export const GLOBAL_SHORTCUTS: GlobalShortcut[] = [
     key: "/",
     ctrl: true,
     modes: [],
+    inGlobalHelp: true,
     intent: { type: "openSearch" },
   },
   {
@@ -91,6 +106,7 @@ export const GLOBAL_SHORTCUTS: GlobalShortcut[] = [
     key: ":",
     ctrl: false,
     modes: ["NORMAL"],
+    inGlobalHelp: false,
     intent: { type: "openCommandDock" },
   },
 ];
@@ -123,24 +139,5 @@ export function matchGlobalShortcut(
  * intent -> effect. Pure apart from the handlers it is given.
  */
 export function dispatchIntent(intent: Intent, handlers: IntentHandlers): void {
-  switch (intent.type) {
-    case "save":
-      handlers.save();
-      return;
-    case "newNote":
-      handlers.newNote();
-      return;
-    case "openQuickSwitcher":
-      handlers.openQuickSwitcher();
-      return;
-    case "openSearch":
-      handlers.openSearch();
-      return;
-    case "toggleSidebar":
-      handlers.toggleSidebar();
-      return;
-    case "openCommandDock":
-      handlers.openCommandDock();
-      return;
-  }
+  handlers[intent.type]();
 }

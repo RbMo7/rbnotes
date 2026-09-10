@@ -6,8 +6,15 @@ import {
   type IntentHandlers,
 } from "@/components/editor/shortcuts";
 
+// A plain stub: the predicate only reads these four fields, so the pure test
+// needs no DOM.
 function key(init: KeyboardEventInit): KeyboardEvent {
-  return new KeyboardEvent("keydown", init);
+  return {
+    key: init.key ?? "",
+    ctrlKey: !!init.ctrlKey,
+    metaKey: !!init.metaKey,
+    altKey: !!init.altKey,
+  } as unknown as KeyboardEvent;
 }
 
 describe("matchGlobalShortcut", () => {
@@ -35,7 +42,7 @@ describe("matchGlobalShortcut", () => {
     });
   });
 
-  it("maps Ctrl+/ to global search, matching the historical bug case both inside and outside the editor", () => {
+  it("regression (44ade68, e9ee86d): Ctrl+/ opens global search from inside and outside the editor", () => {
     expect(matchGlobalShortcut(key({ key: "/", ctrlKey: true }), "NORMAL")).toEqual({
       type: "openSearch",
     });
@@ -50,7 +57,7 @@ describe("matchGlobalShortcut", () => {
     });
   });
 
-  it("opens the command dock from ':' in NORMAL mode only", () => {
+  it("regression (44ade68): ':' opens the command dock only in NORMAL mode", () => {
     expect(matchGlobalShortcut(key({ key: ":" }), "NORMAL")).toEqual({
       type: "openCommandDock",
     });
@@ -115,5 +122,12 @@ describe("GLOBAL_SHORTCUTS", () => {
       expect(s.label.length).toBeGreaterThan(0);
       expect(s.description.length).toBeGreaterThan(0);
     }
+  });
+
+  it("exposes exactly the modifier chords in global help", () => {
+    const globalLabels = GLOBAL_SHORTCUTS.filter((s) => s.inGlobalHelp).map((s) => s.label);
+    expect(globalLabels).toEqual(["Ctrl+S", "Ctrl+N", "Ctrl+P", "Ctrl+B", "Ctrl+/"]);
+    // The editor-only command-line row stays out of the global section.
+    expect(GLOBAL_SHORTCUTS.find((s) => s.id === "command-line")?.inGlobalHelp).toBe(false);
   });
 });

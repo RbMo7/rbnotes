@@ -5,28 +5,27 @@ import { useRouter } from "next/navigation";
 import { useNotesMutations, useCreateNote } from "@/lib/notes-query";
 import { displayFilename } from "@/lib/format";
 import { setNoteFlagsAction, deleteNoteAction } from "@/server/actions/notes";
-import type { NoteOps } from "@/components/editor/command-dispatch";
+import { resolveDeleteMode, type NoteOps } from "@/components/editor/command-dispatch";
 
 /**
- * The note operations the command layer drives, with the archive-vs-delete
- * policy in one place instead of assembled ad hoc in the buffer workspace:
- * an empty buffer is deleted for real; a non-empty buffer is archived.
- * `:delete!` forces the real delete regardless. Optimistic cache updates and
- * the background persistence call live here too.
+ * The note-mutating operations the command layer drives, with the
+ * archive-vs-delete policy in one place instead of assembled ad hoc in the
+ * buffer workspace: an empty buffer is deleted for real; a non-empty buffer
+ * is archived. `:delete!` forces the real delete regardless. Optimistic
+ * cache updates and the background persistence call live here too.
+ *
+ * Save/isDirty are the buffer's, not a note operation, so the caller spreads
+ * those in directly rather than this hook passing them through.
  */
 export function useNoteOperations({
   noteId,
   getContent,
-  save,
-  isDirty,
   notify,
 }: {
   noteId: string;
   getContent: () => string;
-  save: () => Promise<boolean>;
-  isDirty: () => boolean;
   notify: (message: string) => void;
-}): NoteOps {
+}): Pick<NoteOps, "create" | "rename" | "delete"> {
   const router = useRouter();
   const { updateNote, removeNote } = useNotesMutations();
   const createNote = useCreateNote();
@@ -43,12 +42,11 @@ export function useNoteOperations({
     (hard: boolean) => {
       // Same instant pattern as `:new`: update the cache and navigate first,
       // persist in the background. There is nothing to roll back to --
-      // archived/deleted is a one-way door, same as real Vim's `:bd`. An
-      // empty buffer is deleted for real rather than archived (nothing worth
-      // keeping), which is also what makes deleting an unsaved `:new` note
-      // correct: it doesn't exist server-side yet, so the call is a no-op.
-      const isEmpty = getContent().trim().length === 0;
-      if (hard || isEmpty) {
+      // archived/deleted is a one-way door, same as real Vim's `:bd`. The
+      // archive-vs-purge decision itself is the command layer's policy
+      // (resolveDeleteMode); this just applies the resulting mode.
+      const mode = resolveDeleteMode(hard, getContent());
+      if (mode === "purge") {
         removeNote(noteId);
         deleteNoteAction({ noteId }).catch(() => {});
       } else {
@@ -61,7 +59,7 @@ export function useNoteOperations({
   );
 
   return useMemo(
-    () => ({ save, isDirty, create: createNote, rename, delete: deleteNote }),
-    [save, isDirty, createNote, rename, deleteNote],
+    () => ({ create: createNote, rename, delete: deleteNote }),
+    [createNote, rename, deleteNote],
   );
 }

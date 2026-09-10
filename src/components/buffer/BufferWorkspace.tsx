@@ -122,12 +122,11 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   }, []);
 
   // Note operations (with the archive-vs-delete policy) live in their own
-  // module; this component just wires them into the command context.
+  // module; this component just wires them into the command context,
+  // alongside the buffer's own save/isDirty.
   const noteOps = useNoteOperations({
     noteId,
     getContent,
-    save: write,
-    isDirty,
     notify: showNotify,
   });
 
@@ -205,7 +204,10 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   };
 
   // Rebuilt each render so the dispatcher always sees current closures.
-  const commandContext: CommandContext = { note: noteOps, workspace: workspaceOps };
+  const commandContext: CommandContext = {
+    note: { save: write, isDirty, ...noteOps },
+    workspace: workspaceOps,
+  };
 
   const handleCommandSubmit = (raw: string) => {
     setCommandDockOpen(false);

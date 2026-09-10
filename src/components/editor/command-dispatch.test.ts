@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   dispatchCommand,
+  resolveDeleteMode,
   type CommandContext,
   type EditorOps,
 } from "@/components/editor/command-dispatch";
@@ -96,6 +97,27 @@ describe("dispatchCommand", () => {
     expect(h.note.create).toHaveBeenCalledOnce();
   });
 
+  it(":write and :x are aliases for :w and :wq", async () => {
+    await dispatchCommand("write", h.ops, h.ctx);
+    expect(h.note.save).toHaveBeenCalledOnce();
+    expect(h.workspace.quit).not.toHaveBeenCalled();
+
+    h = makeHarness();
+    await dispatchCommand("x", h.ops, h.ctx);
+    expect(h.note.save).toHaveBeenCalledOnce();
+    expect(h.workspace.quit).toHaveBeenCalledOnce();
+  });
+
+  it(":quit is an alias for :q", async () => {
+    await dispatchCommand("quit", h.ops, h.ctx);
+    expect(h.workspace.quit).toHaveBeenCalledOnce();
+  });
+
+  it(":set nornu falls back to absolute line numbers", async () => {
+    await dispatchCommand("set nornu", h.ops, h.ctx);
+    expect(h.workspace.updateSettings).toHaveBeenCalledWith({ lineNumbers: "absolute" });
+  });
+
   it(":rename rewrites the first H1 through the editor adapter, then saves", async () => {
     await dispatchCommand("rename My Title", h.ops, h.ctx);
     expect(h.opsCalls).toContain("replaceFirstH1:My Title");
@@ -161,5 +183,16 @@ describe("dispatchCommand", () => {
     h = makeHarness({ execVimEx: false });
     await dispatchCommand("totally-not-a-command", h.ops, h.ctx);
     expect(h.workspace.notify).toHaveBeenCalledWith(expect.stringContaining("E492"));
+  });
+});
+
+describe("resolveDeleteMode", () => {
+  it("purges an empty buffer and archives a non-empty one", () => {
+    expect(resolveDeleteMode(false, "   \n  ")).toBe("purge");
+    expect(resolveDeleteMode(false, "# Title\n\nsome body")).toBe("archive");
+  });
+
+  it("purges any buffer when forced with :delete!", () => {
+    expect(resolveDeleteMode(true, "# Title\n\nsome body")).toBe("purge");
   });
 });

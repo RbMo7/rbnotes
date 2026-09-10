@@ -13,7 +13,9 @@ export default defineConfig({
     },
   },
   test: {
-    environment: "jsdom",
+    // Pure suites run in node; the two render-hook suites opt into jsdom via
+    // a `// @vitest-environment jsdom` docblock.
+    environment: "node",
     include: ["src/**/*.test.{ts,tsx}"],
   },
 });

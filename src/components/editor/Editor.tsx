@@ -101,6 +101,8 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
 
   const execVimEx = useCallback((command: string): boolean => {
     const view = viewRef.current;
+    // No editor, or vim is off: nothing to run, and nothing to report --
+    // "true" here means "don't surface E492", not "the command succeeded".
     if (!view) return true;
     const cm = getCM(view);
     if (!cm) return true;
@@ -216,7 +218,6 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     // what each chord means (see shortcuts.ts) -- the shell has its own
     // adapter for when focus is outside the editor.
     function handleCapture(event: KeyboardEvent) {
-      if (readOnly) return;
       // Read the vim engine's own live mode rather than a mirrored ref --
       // if a vim-mode-change event were ever missed, a mirrored value could
       // drift and get ':' stuck working in the wrong mode. This is the
@@ -228,6 +229,9 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       if (!intent) return;
       event.preventDefault();
       event.stopPropagation();
+      // Read-only views have no `onIntent`, but they still swallow the chord
+      // (same precedence as before) so e.g. Ctrl+S can't reach the browser's
+      // own save dialog from a shared note.
       onIntentRef.current?.(intent);
     }
     view.dom.addEventListener("keydown", handleCapture, true);
