@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent } from "react";
+import { forwardRef, type KeyboardEvent } from "react";
 import { useWorkspaceStore } from "@/lib/store";
 
 /**
@@ -8,16 +8,18 @@ import { useWorkspaceStore } from "@/lib/store";
  * frontmost (the caller decides that), and a leading `/` switches it into
  * global-search mode -- Enter there opens SearchPalette seeded with the
  * text after the slash, rather than filtering in place.
+ *
+ * Forwards its ref to the underlying `<input>` so SidebarLists can focus it
+ * imperatively (Ctrl+T's "open tags, focus search").
  */
-export function SidebarFilterInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-}) {
+export const SidebarFilterInput = forwardRef<
+  HTMLInputElement,
+  {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder: string;
+  }
+>(function SidebarFilterInput({ value, onChange, placeholder }, ref) {
   const openSearchWith = useWorkspaceStore((s) => s.openSearchWith);
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -30,6 +32,7 @@ export function SidebarFilterInput({
 
   return (
     <input
+      ref={ref}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={handleKeyDown}
@@ -39,4 +42,4 @@ export function SidebarFilterInput({
       className="w-full px-space-3 py-space-2 bg-surface-container text-on-surface font-label-md text-label-md rounded border border-outline-variant/40 placeholder-on-surface-variant/50 outline-none focus:border-primary transition-colors"
     />
   );
-}
+});

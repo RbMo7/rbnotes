@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import type { NoteRecord } from "@/lib/note-types";
 import { useWorkspaceStore } from "@/lib/store";
 
@@ -48,7 +48,7 @@ import { SidebarLists } from "@/components/shell/sidebar/SidebarLists";
 
 afterEach(() => {
   cleanup();
-  useWorkspaceStore.setState({ searchSeed: null, searchOpen: false });
+  useWorkspaceStore.setState({ searchSeed: null, searchOpen: false, focusTagsRequestId: 0 });
 });
 
 describe("SidebarLists", () => {
@@ -111,5 +111,39 @@ describe("SidebarLists", () => {
     expect(useWorkspaceStore.getState().searchSeed).toBe("deadline");
     expect(useWorkspaceStore.getState().searchOpen).toBe(true);
     expect(screen.getByText("shipping-plan.md")).toBeTruthy();
+  });
+
+  it("Ctrl+T (requestFocusTags) switches to the Tags tab and focuses the filter box, from anywhere", async () => {
+    render(<SidebarLists />);
+    expect(screen.getByRole("tab", { name: "Buffers" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+
+    act(() => {
+      useWorkspaceStore.getState().requestFocusTags();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Tags" }).getAttribute("aria-selected")).toBe(
+        "true",
+      );
+      expect(screen.getByLabelText("Filter or search")).toBe(document.activeElement);
+    });
+  });
+
+  it("Ctrl+T again re-focuses even when Tags is already the active tab", async () => {
+    render(<SidebarLists />);
+    fireEvent.click(screen.getByRole("tab", { name: "Tags" }));
+    fireEvent.click(screen.getByText("project"));
+
+    act(() => {
+      useWorkspaceStore.getState().requestFocusTags();
+    });
+
+    await waitFor(() => {
+      // Back out of the tag drill-down, not just "still on Tags".
+      expect(screen.queryByText("#project")).toBeNull();
+      expect(screen.getByLabelText("Filter or search")).toBe(document.activeElement);
+    });
   });
 });

@@ -16,11 +16,13 @@ export function useIntentHandlers(): IntentHandlers {
   const { createAndOpenNote } = useWorkspace();
   const isDesktop = useIsDesktop();
   const toggleSidebar = useWorkspaceStore((s) => s.toggleSidebar);
+  const setSidebarCollapsed = useWorkspaceStore((s) => s.setSidebarCollapsed);
   const setMobileSidebarOpen = useWorkspaceStore((s) => s.setMobileSidebarOpen);
   const mobileSidebarOpen = useWorkspaceStore((s) => s.mobileSidebarOpen);
   const setQuickSwitcherOpen = useWorkspaceStore((s) => s.setQuickSwitcherOpen);
   const setSearchOpen = useWorkspaceStore((s) => s.setSearchOpen);
   const setCommandDockOpen = useWorkspaceStore((s) => s.setCommandDockOpen);
+  const requestFocusTags = useWorkspaceStore((s) => s.requestFocusTags);
 
   return useMemo(
     () => ({
@@ -35,16 +37,26 @@ export function useIntentHandlers(): IntentHandlers {
         else setMobileSidebarOpen(!mobileSidebarOpen);
       },
       openCommandDock: () => setCommandDockOpen(true),
+      focusTags: () => {
+        // "Open tags" has to mean visibly open -- expand a collapsed
+        // desktop sidebar, or open the mobile drawer, before asking
+        // SidebarLists to switch tabs and focus its filter box.
+        if (isDesktop) setSidebarCollapsed(false);
+        else setMobileSidebarOpen(true);
+        requestFocusTags();
+      },
     }),
     [
       createAndOpenNote,
       isDesktop,
       toggleSidebar,
+      setSidebarCollapsed,
       setMobileSidebarOpen,
       mobileSidebarOpen,
       setQuickSwitcherOpen,
       setSearchOpen,
       setCommandDockOpen,
+      requestFocusTags,
     ],
   );
 }

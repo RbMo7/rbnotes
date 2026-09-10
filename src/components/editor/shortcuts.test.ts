@@ -51,6 +51,15 @@ describe("matchGlobalShortcut", () => {
     });
   });
 
+  it("maps Ctrl+T to focusTags from both contexts", () => {
+    expect(matchGlobalShortcut(key({ key: "t", ctrlKey: true }), "NORMAL")).toEqual({
+      type: "focusTags",
+    });
+    expect(matchGlobalShortcut(key({ key: "t", ctrlKey: true }), null)).toEqual({
+      type: "focusTags",
+    });
+  });
+
   it("accepts Cmd (meta) as the modifier too", () => {
     expect(matchGlobalShortcut(key({ key: "n", metaKey: true }), "NORMAL")).toEqual({
       type: "newNote",
@@ -89,6 +98,7 @@ describe("dispatchIntent", () => {
       openSearch: vi.fn(),
       toggleSidebar: vi.fn(),
       openCommandDock: vi.fn(),
+      focusTags: vi.fn(),
     };
 
     dispatchIntent({ type: "save" }, handlers);
@@ -97,6 +107,7 @@ describe("dispatchIntent", () => {
     dispatchIntent({ type: "openSearch" }, handlers);
     dispatchIntent({ type: "toggleSidebar" }, handlers);
     dispatchIntent({ type: "openCommandDock" }, handlers);
+    dispatchIntent({ type: "focusTags" }, handlers);
 
     expect(handlers.save).toHaveBeenCalledOnce();
     expect(handlers.newNote).toHaveBeenCalledOnce();
@@ -104,6 +115,7 @@ describe("dispatchIntent", () => {
     expect(handlers.openSearch).toHaveBeenCalledOnce();
     expect(handlers.toggleSidebar).toHaveBeenCalledOnce();
     expect(handlers.openCommandDock).toHaveBeenCalledOnce();
+    expect(handlers.focusTags).toHaveBeenCalledOnce();
   });
 });
 
@@ -115,6 +127,7 @@ describe("GLOBAL_SHORTCUTS", () => {
     expect(intents).toContain("openQuickSwitcher");
     expect(intents).toContain("openSearch");
     expect(intents).toContain("toggleSidebar");
+    expect(intents).toContain("focusTags");
   });
 
   it("every row carries a label and a description for help", () => {
@@ -126,7 +139,7 @@ describe("GLOBAL_SHORTCUTS", () => {
 
   it("exposes exactly the modifier chords in global help", () => {
     const globalLabels = GLOBAL_SHORTCUTS.filter((s) => s.inGlobalHelp).map((s) => s.label);
-    expect(globalLabels).toEqual(["Ctrl+S", "Ctrl+N", "Ctrl+P", "Ctrl+B", "Ctrl+/"]);
+    expect(globalLabels).toEqual(["Ctrl+S", "Ctrl+N", "Ctrl+P", "Ctrl+B", "Ctrl+/", "Ctrl+T"]);
     // The editor-only command-line row stays out of the global section.
     expect(GLOBAL_SHORTCUTS.find((s) => s.id === "command-line")?.inGlobalHelp).toBe(false);
   });

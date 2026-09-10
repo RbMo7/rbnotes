@@ -66,6 +66,13 @@ type WorkspaceState = {
   setSearchSeed: (seed: string | null) => void;
   openSearchWith: (query: string) => void;
 
+  // A pulse counter (not a boolean) so SidebarLists can react even if the
+  // sidebar's Tags tab and filter box are already focused when Ctrl+T is
+  // pressed again -- an unchanged boolean's effect wouldn't re-fire, but an
+  // incrementing counter always produces a new value to key off.
+  focusTagsRequestId: number;
+  requestFocusTags: () => void;
+
   inspectorOpen: boolean;
   setInspectorOpen: (open: boolean) => void;
   toggleInspector: () => void;
@@ -149,6 +156,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   searchSeed: null,
   setSearchSeed: (searchSeed) => set({ searchSeed }),
   openSearchWith: (searchSeed) => set({ searchSeed, searchOpen: true }),
+
+  focusTagsRequestId: 0,
+  requestFocusTags: () => set((s) => ({ focusTagsRequestId: s.focusTagsRequestId + 1 })),
 
   inspectorOpen: false,
   setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),

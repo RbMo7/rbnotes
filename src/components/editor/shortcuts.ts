@@ -13,6 +13,7 @@ export type IntentMap = {
   openSearch: true;
   toggleSidebar: true;
   openCommandDock: true;
+  focusTags: true;
 };
 
 type IntentType = keyof IntentMap;
@@ -98,6 +99,16 @@ export const GLOBAL_SHORTCUTS: GlobalShortcut[] = [
     modes: [],
     inGlobalHelp: true,
     intent: { type: "openSearch" },
+  },
+  {
+    id: "focus-tags",
+    label: "Ctrl+T",
+    description: "open tags, focus search",
+    key: "t",
+    ctrl: true,
+    modes: [],
+    inGlobalHelp: true,
+    intent: { type: "focusTags" },
   },
   {
     id: "command-line",
