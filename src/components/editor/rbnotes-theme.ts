@@ -54,7 +54,8 @@ export function rbnotesTheme(mode: "NORMAL" | "INSERT" | "VISUAL" | "EDIT" | "RO
         backgroundColor: colors.surfaceContainerLowest,
         color: `${colors.outline}99`,
         border: "none",
-        minWidth: "3.5rem",
+        minWidth: "4.5rem",
+        paddingLeft: "0.75rem",
       },
       ".cm-lineNumbers .cm-gutterElement": {
         padding: "0 1rem 0 0",
