@@ -36,7 +36,7 @@ export function NoteListItem({
         openNote(id);
       }}
       data-active={active}
-      className="w-full flex items-center justify-between px-space-2 py-space-1 font-body-sm text-body-sm rounded group data-[active=true]:bg-surface-container-high data-[active=true]:text-on-surface data-[active=true]:font-medium data-[active=true]:border-l-2 data-[active=true]:border-primary text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+      className="w-full flex items-center justify-between px-space-2 py-space-1 font-body-sm text-body-sm group data-[active=true]:bg-surface-container-high data-[active=true]:text-on-surface data-[active=true]:font-medium data-[active=true]:border-l-2 data-[active=true]:border-primary text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
     >
       <span className="flex items-center gap-space-2 truncate">
         <Icon
