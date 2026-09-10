@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { TerminalWindow, TerminalHeader } from "@/components/auth/TerminalWindow";
 import { AuthField } from "@/components/auth/AuthField";
@@ -10,6 +10,7 @@ import { requestPasswordResetAction } from "@/server/actions/auth";
 import { forgotPasswordSchema } from "@/lib/schemas";
 
 export function ForgotPasswordForm() {
+  const formRef = useRef<HTMLFormElement>(null);
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -40,10 +41,15 @@ export function ForgotPasswordForm() {
     [email],
   );
 
+  const commands = useMemo(
+    () => ({ w: () => formRef.current?.requestSubmit() }),
+    [],
+  );
+
   return (
     <main className="w-full max-w-md">
       <div className="flex flex-col w-full">
-        <TerminalWindow titleBarLabel="RESET.BUFFER">
+        <TerminalWindow titleBarLabel="RESET.BUFFER" commands={commands}>
           <TerminalHeader tagline="Write. Think. Save." />
           {sent ? (
             <p className="font-body-md text-body-md text-on-surface-variant">
@@ -51,7 +57,7 @@ export function ForgotPasswordForm() {
               <span className="text-on-surface">{email}</span>. Follow it to continue.
             </p>
           ) : (
-            <form className="flex flex-col gap-space-4" onSubmit={handleSubmit}>
+            <form ref={formRef} className="flex flex-col gap-space-4" onSubmit={handleSubmit}>
               <AuthField
                 id="email"
                 label="identity (email)"

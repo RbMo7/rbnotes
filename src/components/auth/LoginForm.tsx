@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TerminalWindow, TerminalHeader, OrDivider } from "@/components/auth/TerminalWindow";
@@ -46,24 +46,15 @@ export function LoginForm({ next }: { next: string }) {
     [email, password, next, router],
   );
 
-  useEffect(() => {
-    function handleKeydown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        formRef.current?.reset();
-        setEmail("");
-        setPassword("");
-        setError(null);
-        setStatus("SYS: input buffer flushed");
-      }
-    }
-    document.addEventListener("keydown", handleKeydown);
-    return () => document.removeEventListener("keydown", handleKeydown);
-  }, []);
+  const commands = useMemo(
+    () => ({ wq: () => formRef.current?.requestSubmit() }),
+    [],
+  );
 
   return (
     <main className="w-full max-w-md">
       <div className="flex flex-col w-full">
-        <TerminalWindow titleBarLabel="AUTH.BUFFER">
+        <TerminalWindow titleBarLabel="AUTH.BUFFER" commands={commands}>
           <TerminalHeader tagline="Write. Think. Save." />
           <form ref={formRef} className="flex flex-col gap-space-4" onSubmit={handleSubmit}>
             <AuthField

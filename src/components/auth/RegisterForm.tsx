@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TerminalWindow, TerminalHeader } from "@/components/auth/TerminalWindow";
@@ -52,25 +52,15 @@ export function RegisterForm() {
     [email, password, confirmPassword, router],
   );
 
-  useEffect(() => {
-    function handleKeydown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        formRef.current?.reset();
-        setEmail("");
-        setPassword("");
-        setConfirmPassword("");
-        setError(null);
-        setStatus("SYS: input buffer flushed");
-      }
-    }
-    document.addEventListener("keydown", handleKeydown);
-    return () => document.removeEventListener("keydown", handleKeydown);
-  }, []);
+  const commands = useMemo(
+    () => ({ new: () => formRef.current?.requestSubmit() }),
+    [],
+  );
 
   return (
     <main className="w-full max-w-md">
       <div className="flex flex-col w-full">
-        <TerminalWindow titleBarLabel="NEW.USER">
+        <TerminalWindow titleBarLabel="NEW.USER" commands={commands}>
           <TerminalHeader tagline="Write. Think. Save." />
           {confirmationSent ? (
             <div className="flex flex-col gap-space-3">
