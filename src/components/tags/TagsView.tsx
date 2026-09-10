@@ -6,6 +6,7 @@ import { FileText } from "lucide-react";
 import { displayFilename } from "@/lib/format";
 import { useNotesQuery } from "@/lib/notes-query";
 import { computeTagSummaries, filterNotesByTag } from "@/lib/tags";
+import { TagsSkeleton } from "@/components/tags/TagsSkeleton";
 
 /**
  * Real view, derived from the sidebar's own group/list styling -- Stitch
@@ -15,15 +16,22 @@ import { computeTagSummaries, filterNotesByTag } from "@/lib/tags";
  * network.
  */
 export function TagsView() {
-  const { data: notes = [] } = useNotesQuery();
-  const tags = useMemo(() => computeTagSummaries(notes), [notes]);
+  // Deliberately not `data: notes = []` -- that default made "still
+  // pending" indistinguishable from "genuinely zero tags", flashing the
+  // wrong empty state for a moment on every load instead of a skeleton.
+  const { data: notes, isPending } = useNotesQuery();
+  const tags = useMemo(() => computeTagSummaries(notes ?? []), [notes]);
   const [active, setActive] = useState<string | null>(null);
   const activeTag = active ?? tags[0]?.tag ?? null;
 
   const notesForTag = useMemo(
-    () => (activeTag ? filterNotesByTag(notes, activeTag) : []),
+    () => (activeTag ? filterNotesByTag(notes ?? [], activeTag) : []),
     [notes, activeTag],
   );
+
+  if (isPending) {
+    return <TagsSkeleton />;
+  }
 
   if (tags.length === 0) {
     return (

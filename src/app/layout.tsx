@@ -11,6 +11,9 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "RbNotes",
   description: "A minimalist, Vim-first note-taking application.",
+  icons: {
+    icon: "/logo.svg",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

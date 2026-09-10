@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { displayFilename } from "@/lib/format";
 import { useNotesQuery } from "@/lib/notes-query";
 import { buildNoteGraph } from "@/lib/graph";
+import { GraphSkeleton } from "@/components/graph/GraphSkeleton";
 
 const WIDTH = 900;
 const HEIGHT = 600;
@@ -18,8 +19,11 @@ const HEIGHT = 600;
  * never fetches anything.
  */
 export function GraphView() {
-  const { data: allNotes = [] } = useNotesQuery();
-  const { nodes, edges } = useMemo(() => buildNoteGraph(allNotes), [allNotes]);
+  // Deliberately not `data: allNotes = []` -- see TagsView for why (a
+  // still-pending query must not look identical to "genuinely nothing to
+  // graph yet").
+  const { data: allNotes, isPending } = useNotesQuery();
+  const { nodes, edges } = useMemo(() => buildNoteGraph(allNotes ?? []), [allNotes]);
   const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -34,6 +38,10 @@ export function GraphView() {
     });
     return map;
   }, [nodes]);
+
+  if (isPending) {
+    return <GraphSkeleton />;
+  }
 
   if (nodes.length === 0) {
     return (
