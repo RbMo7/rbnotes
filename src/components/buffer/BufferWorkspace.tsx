@@ -173,17 +173,26 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
       updateNote(noteId, { title: newTitle });
       showNotify(`RENAME: "${displayFilename(newTitle)}" written  [OK]`);
     },
+    // Same instant pattern as :new (see useCreateNote): update the cache
+    // and navigate first, persist in the background after. There's
+    // nothing to roll back to on failure -- archived/deleted is a
+    // one-way door either way, same as real Vim's own `:bd`.
+    //
+    // An empty buffer is deleted for real rather than archived, bang or
+    // not -- there is nothing worth keeping in an "Archive" for a note
+    // that was never written into (this is also what makes deleting an
+    // unsaved `:new` note correct: it doesn't exist server-side yet, so
+    // deleteNoteAction's background call is a harmless no-op there).
     deleteNote: (hard) => {
-      startTransition(async () => {
-        if (hard) {
-          await deleteNoteAction({ noteId });
-          removeNote(noteId);
-        } else {
-          await setNoteFlagsAction({ noteId, archived: true });
-          updateNote(noteId, { archived: true });
-        }
-        router.push("/notes");
-      });
+      const isEmpty = getContent().trim().length === 0;
+      if (hard || isEmpty) {
+        removeNote(noteId);
+        deleteNoteAction({ noteId }).catch(() => {});
+      } else {
+        updateNote(noteId, { archived: true });
+        setNoteFlagsAction({ noteId, archived: true }).catch(() => {});
+      }
+      router.push("/notes");
     },
     openHelp: () => setHelpOpen(true),
     toggleSidebar: () => {

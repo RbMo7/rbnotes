@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Search, Settings } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { ChevronDown, ChevronRight, Search, Settings } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
 import { groupNotes } from "@/lib/grouping";
 import { NoteListItem } from "@/components/shell/NoteListItem";
@@ -22,12 +23,37 @@ export function Sidebar() {
     notes.map((n) => ({ ...n, updatedAt: new Date(n.updatedAt) })),
   );
   const pathname = usePathname();
+  const router = useRouter();
   const createNote = useCreateNote();
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   const handleNewNote = () => {
     createNote();
     setMobileOpen(false);
   };
+
+  // Every note's content already lives in the client cache -- the only
+  // thing still standing between a sidebar click and an instant switch is
+  // Next's own route segment, which it won't fetch ahead of time for a
+  // dynamic page without this. Staggered (not Promise.all) so opening a
+  // notebook with hundreds of notes doesn't fire them all in one burst.
+  // Note: Next only prefetches in production builds -- this has no visible
+  // effect under `next dev`.
+  useEffect(() => {
+    let cancelled = false;
+    const ids = notes.map((n) => n.id);
+    let i = 0;
+    function prefetchNext() {
+      if (cancelled || i >= ids.length) return;
+      router.prefetch(`/notes/${ids[i]}`);
+      i++;
+      setTimeout(prefetchNext, 75);
+    }
+    prefetchNext();
+    return () => {
+      cancelled = true;
+    };
+  }, [notes, router]);
 
   return (
     <>
@@ -79,24 +105,58 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-space-3 py-space-2 space-y-space-4">
-        {groups.map((group) => (
-          <div key={group.label} className="space-y-space-1">
-            <div className="px-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider">
-              {group.label}
+        {groups.map((group) =>
+          group.label === "ARCHIVE" ? (
+            <div key={group.label} className="space-y-space-1">
+              <button
+                onClick={() => setArchiveOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider hover:text-on-surface-variant transition-colors"
+              >
+                <span className="flex items-center gap-space-1">
+                  {archiveOpen ? (
+                    <ChevronDown size={12} strokeWidth={2} />
+                  ) : (
+                    <ChevronRight size={12} strokeWidth={2} />
+                  )}
+                  {group.label}
+                </span>
+                <span className="normal-case tracking-normal text-outline/70">
+                  {group.notes.length}
+                </span>
+              </button>
+              {archiveOpen && (
+                <div className="space-y-space-px">
+                  {group.notes.map((note) => (
+                    <NoteListItem
+                      key={note.id}
+                      id={note.id}
+                      title={note.title}
+                      updatedAt={note.updatedAt}
+                      archived={note.archived}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="space-y-space-px">
-              {group.notes.map((note) => (
-                <NoteListItem
-                  key={note.id}
-                  id={note.id}
-                  title={note.title}
-                  updatedAt={note.updatedAt}
-                  archived={note.archived}
-                />
-              ))}
+          ) : (
+            <div key={group.label} className="space-y-space-1">
+              <div className="px-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider">
+                {group.label}
+              </div>
+              <div className="space-y-space-px">
+                {group.notes.map((note) => (
+                  <NoteListItem
+                    key={note.id}
+                    id={note.id}
+                    title={note.title}
+                    updatedAt={note.updatedAt}
+                    archived={note.archived}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ),
+        )}
         {groups.length === 0 && (
           <p className="px-space-2 font-body-sm text-body-sm text-outline/50">
             ~ no notes yet
