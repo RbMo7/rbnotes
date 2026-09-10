@@ -3,29 +3,17 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { ChevronDown, ChevronRight, Search, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
-import { groupNotes } from "@/lib/grouping";
-import { NoteListItem } from "@/components/shell/NoteListItem";
-import { useNotesQuery } from "@/lib/notes-query";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { SidebarLists } from "@/components/shell/sidebar/SidebarLists";
 
 export function Sidebar() {
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);
   const mobileOpen = useWorkspaceStore((s) => s.mobileSidebarOpen);
   const setMobileOpen = useWorkspaceStore((s) => s.setMobileSidebarOpen);
-  const setSearchOpen = useWorkspaceStore((s) => s.setSearchOpen);
-  const { data: notes = [] } = useNotesQuery();
-  // Metadata is already loaded client-side (see lib/notes-query.ts), so
-  // grouping/sorting here is a pure in-memory computation -- the same
-  // reason tags and graph don't fetch anything on click either.
-  const groups = groupNotes(
-    notes.map((n) => ({ ...n, updatedAt: new Date(n.updatedAt) })),
-  );
   const pathname = usePathname();
   const { createAndOpenNote } = useWorkspace();
-  const [archiveOpen, setArchiveOpen] = useState(false);
 
   const handleNewNote = () => {
     createAndOpenNote();
@@ -49,19 +37,19 @@ export function Sidebar() {
         onClick={() => setMobileOpen(false)}
         className="fixed left-0 top-0 bottom-status-bar-height w-sidebar-width bg-surface-container-low border-r border-outline-variant/30 flex flex-col z-40 transition-transform duration-150 max-lg:-translate-x-full max-lg:data-[mobile-open=true]:translate-x-0 lg:translate-x-0 lg:data-[collapsed=true]:-translate-x-full"
       >
-      <div className="h-14 px-space-4 border-b border-outline-variant/30 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-space-2">
+      <div className="h-header-height px-space-4 border-b border-outline-variant/30 flex items-center justify-between shrink-0">
+        <Link href="/" className="flex items-center gap-space-2">
           <Image src="/logo.svg" alt="RbNotes" width={32} height={32} className="h-8 w-auto" />
           <span className="font-headline-sm text-headline-sm text-on-surface font-semibold tracking-tight">
             RbNotes
           </span>
-        </div>
+        </Link>
         <span className="font-label-sm text-label-sm text-outline px-space-1 py-space-0 rounded bg-surface-container-high">
           v0.4.2
         </span>
       </div>
 
-      <div className="p-space-3 space-y-space-2 shrink-0 border-b border-outline-variant/20">
+      <div className="p-space-3 shrink-0 border-b border-outline-variant/20">
         <button
           onClick={handleNewNote}
           className="w-full flex items-center justify-between px-space-3 py-space-2 bg-primary text-on-primary font-label-md text-label-md rounded hover:bg-primary-fixed transition-colors"
@@ -69,77 +57,9 @@ export function Sidebar() {
           <span>+ New Note</span>
           <span className="font-label-sm text-label-sm opacity-80">[^N]</span>
         </button>
-        <button
-          onClick={() => setSearchOpen(true)}
-          className="w-full flex items-center justify-between px-space-3 py-space-2 bg-surface-container text-on-surface-variant font-label-md text-label-md rounded border border-outline-variant/40 hover:text-on-surface hover:bg-surface-container-high transition-colors"
-        >
-          <span className="flex items-center gap-space-2">
-            <Search size={16} strokeWidth={1.5} />
-            <span>/ Quick search</span>
-          </span>
-          <span className="font-label-sm text-label-sm text-outline">[^/]</span>
-        </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-space-3 py-space-2 space-y-space-4">
-        {groups.map((group) =>
-          group.label === "ARCHIVE" ? (
-            <div key={group.label} className="space-y-space-1">
-              <button
-                onClick={() => setArchiveOpen((v) => !v)}
-                className="w-full flex items-center justify-between px-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider hover:text-on-surface-variant transition-colors"
-              >
-                <span className="flex items-center gap-space-1">
-                  {archiveOpen ? (
-                    <ChevronDown size={12} strokeWidth={2} />
-                  ) : (
-                    <ChevronRight size={12} strokeWidth={2} />
-                  )}
-                  {group.label}
-                </span>
-                <span className="normal-case tracking-normal text-outline/70">
-                  {group.notes.length}
-                </span>
-              </button>
-              {archiveOpen && (
-                <div className="space-y-space-px">
-                  {group.notes.map((note) => (
-                    <NoteListItem
-                      key={note.id}
-                      id={note.id}
-                      title={note.title}
-                      updatedAt={note.updatedAt}
-                      archived={note.archived}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div key={group.label} className="space-y-space-1">
-              <div className="px-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider">
-                {group.label}
-              </div>
-              <div className="space-y-space-px">
-                {group.notes.map((note) => (
-                  <NoteListItem
-                    key={note.id}
-                    id={note.id}
-                    title={note.title}
-                    updatedAt={note.updatedAt}
-                    archived={note.archived}
-                  />
-                ))}
-              </div>
-            </div>
-          ),
-        )}
-        {groups.length === 0 && (
-          <p className="px-space-2 font-body-sm text-body-sm text-outline/50">
-            ~ no notes yet
-          </p>
-        )}
-      </nav>
+      <SidebarLists />
 
       <div className="h-12 px-space-4 border-t border-outline-variant/30 flex items-center justify-between shrink-0 bg-surface-container-low">
         <Link
