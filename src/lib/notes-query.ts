@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { getAllNotesAction } from "@/server/actions/notes";
 import { notesQueryKey, type FullNote } from "@/lib/note-types";
@@ -73,6 +74,38 @@ export function useNotesMutations() {
   );
 
   return { addNote, updateNote, removeNote };
+}
+
+/**
+ * `:new` never round-trips to the server before showing you anything --
+ * that round trip (session check + Prisma insert) was the entire 3-5s delay
+ * users felt. Instead this generates the note's real, permanent id
+ * client-side, writes a complete blank note straight into the cache, and
+ * navigates -- all synchronous, zero network. The row genuinely does not
+ * exist server-side yet; it's created on the first `:w` via an upsert (see
+ * lib/notes.ts's upsertNoteContent), exactly like an unnamed buffer in real
+ * Vim never touches disk until saved. Callers needing extra side effects
+ * (closing the mobile sidebar drawer, say) do them after calling this.
+ */
+export function useCreateNote() {
+  const { addNote } = useNotesMutations();
+  const router = useRouter();
+
+  return useCallback(() => {
+    const now = new Date().toISOString();
+    const note: FullNote = {
+      id: crypto.randomUUID(),
+      title: "untitled",
+      content: "",
+      pinned: false,
+      archived: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    addNote(note);
+    router.push(`/notes/${note.id}`);
+    return note.id;
+  }, [addNote, router]);
 }
 
 /** Position among the user's notes by creation order, for the "buffer #N" chip -- computed client-side from the already-loaded list instead of a DB count query. */

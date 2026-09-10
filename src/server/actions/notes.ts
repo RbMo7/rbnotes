@@ -2,7 +2,7 @@
 
 import { getAuthedUser } from "@/lib/auth";
 import * as notes from "@/lib/notes";
-import { createNoteSchema, noteIdSchema, setNoteFlagSchema, updateNoteContentSchema } from "@/lib/schemas";
+import { noteIdSchema, setNoteFlagSchema, updateNoteContentSchema } from "@/lib/schemas";
 
 // Every action here re-derives the user from the session via
 // getAuthedUser() and never trusts a userId passed in from the client.
@@ -22,20 +22,12 @@ export async function getAllNotesAction() {
   return notes.listAllNotesFull(user.id);
 }
 
-export async function createNoteAction(input: unknown) {
-  const user = await getAuthedUser();
-  const { title } = createNoteSchema.parse(input);
-  // Returns the full note (not just an id) so the caller can insert it
-  // straight into the notes-query cache without a refetch.
-  return notes.createNote(user.id, title);
-}
-
 export async function saveNoteContentAction(input: unknown) {
   const user = await getAuthedUser();
   const { noteId, content, clientRevision } = updateNoteContentSchema.parse(input);
-  const note = await notes.updateNoteContent(user.id, noteId, content);
+  const note = await notes.upsertNoteContent(user.id, noteId, content);
   return {
-    updatedAt: note.updatedAt.toISOString(),
+    updatedAt: note.updatedAt,
     clientRevision,
     title: note.title,
   };

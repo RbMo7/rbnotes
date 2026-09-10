@@ -45,10 +45,6 @@ export const resetPasswordSchema = z
 // Deliberately no `userId` field anywhere below — it is always derived
 // server-side from the session, never accepted from the client.
 
-export const createNoteSchema = z.object({
-  title: z.string().trim().min(1).max(200).optional(),
-});
-
 export const updateNoteContentSchema = z.object({
   noteId: z.uuid(),
   content: z.string().max(1_000_000),

@@ -48,31 +48,41 @@ function toFullNote(note: {
   };
 }
 
-export async function createNote(userId: string, title?: string): Promise<FullNote> {
-  const note = await db.note.create({
-    data: { userId, title: title?.trim() || "untitled", content: "" },
-  });
-  return toFullNote(note);
-}
-
 /**
  * A note's title is always its own first `# heading` (see
  * lib/markdown-title.ts) -- there's no separate title field to fall out of
  * sync, so every content write re-derives it. `:rename` doesn't call a
  * different code path; it edits the heading line client-side and this same
  * function persists the result.
+ *
+ * `:new` never calls the server at all (see lib/notes-query.ts's
+ * useCreateNote) -- a brand-new note only exists in the client cache until
+ * its first explicit `:w`, exactly like an unnamed buffer in real Vim never
+ * touches disk until saved. So this is an upsert, not a plain update: the
+ * first save of such a note has nothing to update yet and genuinely creates
+ * the row, using the id the client already generated (and already
+ * navigated to and rendered) rather than minting a new one here.
  */
-export async function updateNoteContent(
+export async function upsertNoteContent(
   userId: string,
   noteId: string,
   content: string,
-) {
+): Promise<FullNote> {
+  const title = deriveTitleFromContent(content);
   const result = await db.note.updateMany({
     where: { id: noteId, userId, deletedAt: null },
-    data: { content, title: deriveTitleFromContent(content) },
+    data: { content, title },
   });
-  if (result.count === 0) throw new Error("Note not found");
-  return db.note.findFirstOrThrow({ where: { id: noteId, userId } });
+  if (result.count > 0) {
+    return toFullNote(await db.note.findFirstOrThrow({ where: { id: noteId, userId } }));
+  }
+  // Nothing existed to update -- this is the first save of a client-created
+  // note. If `noteId` happened to collide with another user's row
+  // (practically impossible for a random UUID), the `id` primary key's
+  // unique constraint rejects this outright instead of silently adopting
+  // someone else's note.
+  const note = await db.note.create({ data: { id: noteId, userId, title, content } });
+  return toFullNote(note);
 }
 
 export async function setNoteFlags(

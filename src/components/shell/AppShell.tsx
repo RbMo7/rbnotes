@@ -1,16 +1,13 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
-import { useTransition } from "react";
 import { TopNav } from "@/components/shell/TopNav";
 import { StatusBar } from "@/components/shell/StatusBar";
 import { QuickSwitcher } from "@/components/overlay/QuickSwitcher";
 import { SearchPalette } from "@/components/overlay/SearchPalette";
 import { useWorkspaceStore } from "@/lib/store";
 import { useIsDesktop } from "@/lib/use-is-desktop";
-import { createNoteAction } from "@/server/actions/notes";
-import { useNotesMutations } from "@/lib/notes-query";
+import { useCreateNote } from "@/lib/notes-query";
 
 export function AppShell({
   email,
@@ -27,9 +24,7 @@ export function AppShell({
   const setSearchOpen = useWorkspaceStore((s) => s.setSearchOpen);
   const activeFilename = useWorkspaceStore((s) => s.activeFilename);
   const isDesktop = useIsDesktop();
-  const router = useRouter();
-  const [, startTransition] = useTransition();
-  const { addNote } = useNotesMutations();
+  const createNote = useCreateNote();
 
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -50,11 +45,7 @@ export function AppShell({
       }
       if (event.ctrlKey && event.key.toLowerCase() === "n") {
         event.preventDefault();
-        startTransition(async () => {
-          const note = await createNoteAction({});
-          addNote(note);
-          router.push(`/notes/${note.id}`);
-        });
+        createNote();
         return;
       }
       if (event.key === "/" && !inEditor) {
@@ -73,9 +64,7 @@ export function AppShell({
     setMobileSidebarOpen,
     setQuickSwitcherOpen,
     setSearchOpen,
-    router,
-    startTransition,
-    addNote,
+    createNote,
   ]);
 
   return (

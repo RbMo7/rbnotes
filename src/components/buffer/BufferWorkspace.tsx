@@ -16,8 +16,8 @@ import { useManualSave } from "@/components/editor/use-manual-save";
 import { useWorkspaceStore } from "@/lib/store";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { displayFilename } from "@/lib/format";
-import { useNotesQuery, useNotesMutations, computeBufferNumber } from "@/lib/notes-query";
-import { setNoteFlagsAction, deleteNoteAction, createNoteAction } from "@/server/actions/notes";
+import { useNotesQuery, useNotesMutations, useCreateNote, computeBufferNumber } from "@/lib/notes-query";
+import { setNoteFlagsAction, deleteNoteAction } from "@/server/actions/notes";
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
 import { saveSettingsAction } from "@/server/actions/settings";
 import type { Settings } from "@/lib/schemas";
@@ -28,7 +28,8 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   const isDesktop = useIsDesktop();
 
   const { data: notes } = useNotesQuery();
-  const { addNote, updateNote, removeNote } = useNotesMutations();
+  const { updateNote, removeNote } = useNotesMutations();
+  const createNote = useCreateNote();
   // Both scoped to this user at the one fetch that populated the cache
   // (see (app)/layout.tsx) -- a note that doesn't exist, or belongs to
   // someone else, simply isn't in `notes` either way. See "not found"
@@ -130,14 +131,6 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
     showNotify("SHARE: link copied  [OK]");
   }, [shareToken, showNotify]);
 
-  const handleNewNote = useCallback(() => {
-    startTransition(async () => {
-      const newNote = await createNoteAction({});
-      addNote(newNote);
-      router.push(`/notes/${newNote.id}`);
-    });
-  }, [router, addNote]);
-
   const updateSettings = useCallback(
     (patch: Partial<Settings>) => {
       setSettingsStore(patch);
@@ -169,7 +162,7 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
       else if (inspectorOpen) setInspectorOpen(false);
     },
     isDirty,
-    createNew: handleNewNote,
+    createNew: createNote,
     // The actual rename (splicing the new title into the document's first
     // `#` heading, then persisting) happens in command-dispatch.ts, which
     // has direct access to the CodeMirror view -- a note's title is that
@@ -287,7 +280,7 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
                 vimEnabled={vimEnabled}
                 onChange={markDirty}
                 onOpenCommandDock={() => setCommandDockOpen(true)}
-                onNewNote={handleNewNote}
+                onNewNote={createNote}
                 onOpenQuickSwitcher={() => setQuickSwitcherOpen(true)}
                 onToggleSidebar={() => {
                   if (isDesktop) toggleSidebar();
