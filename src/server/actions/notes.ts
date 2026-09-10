@@ -26,18 +26,12 @@ export async function getAllNotesMetaAction() {
 }
 
 /**
- * The per-note content fetch: cold-open and the background warm-up loop are
- * its only two callers (see lib/notes-query.ts's warmNoteContent). Throws
- * on a miss (wrong user, wrong id, deleted) -- there is nothing sensible to
- * warm a buffer with in that case, and the caller already knows the id came
- * from a prefetched, user-scoped metadata list.
+ * The batched content fetch: warmAllNotes (lib/notes-query.ts) is its only
+ * caller, fired once right after first paint.
  */
-export async function getNoteContentAction(input: unknown) {
+export async function getAllNoteContentsAction() {
   const user = await getAuthedUser();
-  const { noteId } = noteIdSchema.parse(input);
-  const content = await notes.getNoteContent(user.id, noteId);
-  if (content === null) throw new Error("Note not found");
-  return { content };
+  return notes.getAllNoteContents(user.id);
 }
 
 export async function saveNoteContentAction(input: unknown) {

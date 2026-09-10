@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceNav } from "@/components/workspace/useWorkspaceNav";
-import { useWarmUpScheduler } from "@/components/workspace/useWarmUpScheduler";
-import { useNotesQuery, useCreateNote } from "@/lib/notes-query";
+import { useNotesQuery, useCreateNote, warmAllNotes } from "@/lib/notes-query";
 import type { NoteRecord } from "@/lib/note-types";
-import { useWorkspaceStore } from "@/lib/store";
+import { useWorkspaceStore, isNoteDirty } from "@/lib/store";
 import { WorkspaceContextProvider, type WorkspaceApi } from "@/components/workspace/WorkspaceContext";
 import { WorkspaceBuffer } from "@/components/workspace/WorkspaceBuffer";
 import { Sidebar } from "@/components/shell/Sidebar";
@@ -38,7 +38,14 @@ export function WorkspaceProvider({ email, children }: { email: string; children
   const createNote = useCreateNote();
   const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);
   const setActiveBufferInfo = useWorkspaceStore((s) => s.setActiveBufferInfo);
-  useWarmUpScheduler();
+  const queryClient = useQueryClient();
+
+  // Fired once, right after first paint: warms every note's content in one
+  // batch rather than a serial per-note loop (see lib/notes-query.ts's
+  // warmAllNotes for the skip-dirty/stale-never-clobbers guarantees).
+  useEffect(() => {
+    void warmAllNotes(queryClient, isNoteDirty);
+  }, [queryClient]);
 
   // The Dashboard (`/`) is the landing screen now, not a resolved buffer --
   // so nothing here auto-opens a note on bare `/notes` anymore. Leaving the

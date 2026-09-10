@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { VimStatuslineDock } from "@/components/buffer/VimStatuslineDock";
 import { QuickActionsStrip } from "@/components/buffer/QuickActionsStrip";
@@ -23,10 +22,10 @@ import { useIntentHandlers } from "@/components/editor/use-intent-handlers";
 import { useAutosave } from "@/components/workspace/useAutosave";
 import { useNoteOperations } from "@/components/buffer/use-note-operations";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
-import { useWorkspaceStore, isNoteDirty } from "@/lib/store";
+import { useWorkspaceStore } from "@/lib/store";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { displayFilename, formatWordCount, shortHash } from "@/lib/format";
-import { useNotesQuery, useNotesMutations, warmNoteContent } from "@/lib/notes-query";
+import { useNotesQuery, useNotesMutations } from "@/lib/notes-query";
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
 import { saveSettingsAction } from "@/server/actions/settings";
 import type { Settings } from "@/lib/schemas";
@@ -42,7 +41,6 @@ export function WorkspaceBuffer() {
   const { activeNoteId, goHome } = useWorkspace();
   const editorRef = useRef<EditorHandle>(null);
   const isDesktop = useIsDesktop();
-  const queryClient = useQueryClient();
 
   const { data: notes } = useNotesQuery();
   const { updateNote } = useNotesMutations();
@@ -110,14 +108,6 @@ export function WorkspaceBuffer() {
     });
     return () => setActiveBufferInfo(null);
   }, [note?.content, note?.createdAt, setActiveBufferInfo]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Cold-open: jump the warm-up queue for whichever buffer is active and
-  // still cold. warmNoteContent is idempotent (a no-op if already
-  // warm/dirty/in-flight), so this can't race the background warm-up loop.
-  useEffect(() => {
-    if (!activeNoteId || !note || note.content !== undefined) return;
-    void warmNoteContent(queryClient, activeNoteId, isNoteDirty);
-  }, [activeNoteId, note, queryClient]);
 
   // A global-search result click stashes {noteId, query} in the store right
   // before switching (see SearchPalette.tsx); read-and-clear it once per

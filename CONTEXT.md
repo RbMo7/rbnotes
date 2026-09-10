@@ -17,10 +17,10 @@ _Avoid_: search palette, full search
 ### Cache & freshness
 
 **Warm buffer / cold buffer**:
-A buffer is warm when its content is already in the client cache; cold when it isn't. Cold-open fetches on demand and jumps the warm-up queue. A cold buffer is never editable-empty — only its skeleton — so a save can never overwrite real content with an empty document.
+A buffer is warm when its content is already in the client cache; cold when it isn't. A cold buffer is never editable-empty — only its skeleton — so a save can never overwrite real content with an empty document.
 
 **Warm-up**:
-The background fetch of every note's content into the client cache after first paint. Most-recently-updated first, one at a time. First paint blocks only on metadata; warm-up is invisible.
+The one-time batched fetch of every note's content into the client cache, fired once right after first paint. First paint blocks only on metadata; warm-up is invisible.
 
 **Friction**:
 Any visible waiting state — spinner, skeleton, disabled control, blocked input — that follows a user action. The product bar is zero friction after first paint.

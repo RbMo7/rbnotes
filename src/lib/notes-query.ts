@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { getAllNotesMetaAction, getNoteContentAction } from "@/server/actions/notes";
+import { getAllNotesMetaAction, getAllNoteContentsAction } from "@/server/actions/notes";
 import { notesQueryKey, type NoteRecord } from "@/lib/note-types";
 
 export type { NoteRecord };
@@ -10,11 +10,11 @@ export type { NoteRecord };
 /**
  * The single client-side cache the whole app reads from: every note's
  * metadata, fetched once (hydrated server-side on first load, see
- * (app)/layout.tsx), with `content` filled in per note as it warms (see
- * warmNoteContent below) -- kept in sync purely through our own mutations
- * writing straight into this cache, never by refetching. Note switching,
- * tags, graph, and search all read this same array; a note's `content` key
- * being present or absent is the one source of truth for warm vs. cold.
+ * (app)/layout.tsx), with `content` filled in for every note in one batch
+ * right after (see warmAllNotes below) -- kept in sync purely through our
+ * own mutations writing straight into this cache, never by refetching. Note
+ * switching, tags, and search all read this same array; a note's `content`
+ * key being present or absent is the one source of truth for warm vs. cold.
  *
  * NoteRecord's dates are ISO strings, not Date objects, deliberately --
  * TanStack Query's dehydrate/hydrate boundary (server -> client) round-trips
@@ -31,52 +31,45 @@ export function useNotesQuery() {
   });
 }
 
-/** Convenience for reading the cache outside a hook's own re-render (e.g. imperative lookups in event handlers). */
-export function getNoteFromCache(queryClient: QueryClient, id: string): NoteRecord | undefined {
-  return queryClient.getQueryData<NoteRecord[]>(notesQueryKey)?.find((n) => n.id === id);
-}
-
 /** True once every note in the cache has its content warmed -- the boundary hybrid search resolves on. */
 export function isFullyWarm(notes: NoteRecord[]): boolean {
   return notes.every((n) => n.content !== undefined);
 }
 
 /**
- * The per-note content fetch: cold-open (jumping the queue) and the
- * background warm-up loop are its only two callers. A no-op if the note is
- * already warm, unknown, or dirty (`isDirty` lets a buffer with unsaved
- * local edits opt out -- warming would have nothing useful to add and only
- * risks a race with what the user is mid-typing).
- *
- * Stale-never-clobbers: the fetch's result is only written if, by the time
- * it resolves, the note is *still* cold and hasn't been touched (its
- * `updatedAt` hasn't moved -- a save, or a concurrent warm of the same
- * note, would have changed it). This is deliberately a freshness check
- * against the cache at write-time, not a cancellation token -- a
- * superseded fetch is left to resolve and simply gets discarded.
+ * The whole-cache content fetch: fired once, right after first paint (see
+ * WorkspaceProvider), to warm every note's content in a single request. A
+ * given note is skipped if it's already warm (e.g. just created client-side
+ * via useCreateNote), dirty (`isDirty` lets a buffer with unsaved local
+ * edits opt out -- warming would have nothing useful to add and only risks
+ * a race with what the user is mid-typing), or has moved since the batch
+ * started (stale-never-clobbers: a save, or a concurrent warm, changes
+ * `updatedAt`, and a fetch that's now behind that change is discarded
+ * rather than overwriting something fresher).
  */
-export async function warmNoteContent(
+export async function warmAllNotes(
   queryClient: QueryClient,
-  noteId: string,
   isDirty?: (noteId: string) => boolean,
 ): Promise<void> {
-  const before = getNoteFromCache(queryClient, noteId);
-  if (!before || before.content !== undefined) return;
-  if (isDirty?.(noteId)) return;
+  const before = queryClient.getQueryData<NoteRecord[]>(notesQueryKey) ?? [];
+  const updatedAtBefore = new Map(before.map((n) => [n.id, n.updatedAt]));
 
-  let content: string;
+  let results: { id: string; content: string }[];
   try {
-    ({ content } = await getNoteContentAction({ noteId }));
+    results = await getAllNoteContentsAction();
   } catch {
     return;
   }
-
-  const current = getNoteFromCache(queryClient, noteId);
-  if (!current || current.content !== undefined) return;
-  if (current.updatedAt !== before.updatedAt) return;
+  const contentById = new Map(results.map((r) => [r.id, r.content]));
 
   queryClient.setQueryData<NoteRecord[]>(notesQueryKey, (old) =>
-    old?.map((n) => (n.id === noteId ? { ...n, content } : n)),
+    old?.map((n) => {
+      if (n.content !== undefined) return n;
+      if (isDirty?.(n.id)) return n;
+      if (updatedAtBefore.get(n.id) !== n.updatedAt) return n;
+      const content = contentById.get(n.id);
+      return content === undefined ? n : { ...n, content };
+    }),
   );
 }
 

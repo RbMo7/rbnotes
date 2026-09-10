@@ -15,3 +15,7 @@ The app felt like a website: first paint waited on every note's full content, an
 ## Amendment (unified shell)
 
 Home entry is no longer "resolve to the most-recently-updated buffer" — bare `/notes` now redirects to the Dashboard at `/`, a real route rendered inside this same persistent shell. The most-recent-buffer resolution survives only inside `goHome()`, used after a note is deleted, where landing on the Dashboard instead of the next buffer would be a jarring context switch. `clearToHome` (the "no notes left" fallback) is gone; that case now navigates to `/` directly.
+
+## Amendment (batched warm-up)
+
+Content warming is no longer a serial per-note loop with an artificial stagger between requests — it's a single batched fetch of every note's content, fired once right after first paint. The serial loop existed to avoid hammering the server, but at this app's expected scale (a personal notes app, short-form content) a single request costs about the same as one of the old per-note requests while eliminating the other N-1 round trips entirely; Next.js Server Actions also serialize on the client dispatcher by design, so N per-note requests couldn't have been parallelized anyway. Cold-open no longer jumps a queue to fetch on demand, since there's no longer a queue — every note becomes warm at the same moment the one batch resolves.

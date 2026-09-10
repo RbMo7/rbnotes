@@ -16,9 +16,9 @@ import type { NoteMeta, NoteRecord } from "@/lib/note-types";
  * metadata only -- no content column. Prefetched server-side in
  * (app)/layout.tsx and hydrated into the client's TanStack Query cache;
  * lib/notes-query.ts's useNotesQuery reads this same shape. Content is
- * fetched separately, per note, on demand or via the background warm-up
- * loop (see getNoteContent below) -- this is exactly what keeps first paint
- * from waiting on every note's full text.
+ * fetched separately, in one batch, right after (see getAllNoteContents
+ * below) -- this is exactly what keeps first paint from waiting on every
+ * note's full text.
  */
 export async function listAllNotesMeta(userId: string): Promise<NoteMeta[]> {
   const notes = await db.note.findMany({
@@ -41,18 +41,21 @@ export async function listAllNotesMeta(userId: string): Promise<NoteMeta[]> {
 }
 
 /**
- * The per-note content fetch: one of the two new minimal contracts this
- * data layer grew for warmed buffers (the other is searchNoteContents
- * below). Returns `null` on a cache-miss-shaped failure (wrong user, wrong
- * id, deleted) rather than throwing, so a cold-open racing a delete/logout
- * fails quietly instead of surfacing a raw DB error to the warm-up loop.
+ * The batched content fetch: every one of the user's notes' content, in one
+ * query, fired once right after first paint (see lib/notes-query.ts's
+ * warmAllNotes). Same scoping as listAllNotesMeta (including archived notes
+ * -- they're eligible to warm too, just tucked into the sidebar's ARCHIVE
+ * group). At this app's expected scale (a personal notes app, short-form
+ * content) one unbounded batch is the right call -- see the plan this
+ * replaced the old per-note staggered warm-up loop with for the reasoning.
  */
-export async function getNoteContent(userId: string, noteId: string): Promise<string | null> {
-  const note = await db.note.findFirst({
-    where: { id: noteId, userId, deletedAt: null },
-    select: { content: true },
+export async function getAllNoteContents(
+  userId: string,
+): Promise<{ id: string; content: string }[]> {
+  return db.note.findMany({
+    where: { userId, deletedAt: null },
+    select: { id: true, content: true },
   });
-  return note?.content ?? null;
 }
 
 function toNoteRecord(note: {
