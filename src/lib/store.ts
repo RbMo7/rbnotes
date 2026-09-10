@@ -37,6 +37,14 @@ type WorkspaceState = {
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
 
+  // One-shot handoff from a global-search result click to the note buffer
+  // it navigates to: BufferWorkspace reads and clears this once on mount
+  // (see SettingsHydrator for the same "consume the initial value once"
+  // pattern) so the editor can select the matched text instead of just
+  // opening the note at whatever the cursor last was.
+  pendingSearchMatch: { noteId: string; query: string } | null;
+  setPendingSearchMatch: (match: { noteId: string; query: string } | null) => void;
+
   inspectorOpen: boolean;
   setInspectorOpen: (open: boolean) => void;
   toggleInspector: () => void;
@@ -87,6 +95,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
 
   searchOpen: false,
   setSearchOpen: (searchOpen) => set({ searchOpen }),
+
+  pendingSearchMatch: null,
+  setPendingSearchMatch: (pendingSearchMatch) => set({ pendingSearchMatch }),
 
   inspectorOpen: false,
   setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),

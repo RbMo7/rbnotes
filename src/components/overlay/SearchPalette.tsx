@@ -36,6 +36,7 @@ function highlight(text: string, query: string) {
 export function SearchPalette() {
   const open = useWorkspaceStore((s) => s.searchOpen);
   const setOpen = useWorkspaceStore((s) => s.setSearchOpen);
+  const setPendingSearchMatch = useWorkspaceStore((s) => s.setPendingSearchMatch);
   const { data: notes = [] } = useNotesQuery();
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -86,6 +87,13 @@ export function SearchPalette() {
                   key={note.id}
                   onClick={() => {
                     setOpen(false);
+                    // Consumed once by BufferWorkspace on mount (see
+                    // store.ts) to select the matched text instead of
+                    // just opening the note at wherever the cursor last
+                    // was. If the query doesn't literally appear in the
+                    // content (a title-only match, say), Editor.tsx's
+                    // lookup simply finds nothing and this is a no-op.
+                    setPendingSearchMatch({ noteId: note.id, query });
                     router.push(`/notes/${note.id}`);
                   }}
                   className="w-full flex flex-col gap-space-1 px-space-4 py-space-2 text-left hover:bg-surface-container-high"

@@ -100,7 +100,7 @@ export function Sidebar() {
             <Search size={16} strokeWidth={1.5} />
             <span>/ Quick search</span>
           </span>
-          <span className="font-label-sm text-label-sm text-outline">[/]</span>
+          <span className="font-label-sm text-label-sm text-outline">[^/]</span>
         </button>
       </div>
 

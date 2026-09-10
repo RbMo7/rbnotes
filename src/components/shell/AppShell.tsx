@@ -28,10 +28,6 @@ export function AppShell({
 
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
-      const inEditor = !!(document.activeElement as HTMLElement | null)?.closest(
-        ".cm-editor",
-      );
-
       if (event.ctrlKey && event.key.toLowerCase() === "b") {
         event.preventDefault();
         if (isDesktop) toggleSidebar();
@@ -48,9 +44,13 @@ export function AppShell({
         createNote();
         return;
       }
-      if (event.key === "/" && !inEditor) {
-        const target = event.target as HTMLElement;
-        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      // Ctrl+/ opens global (every note) search from anywhere -- when
+      // focus is inside the editor, Editor.tsx's own capture-phase
+      // listener handles this first and stops it from reaching here
+      // (same pattern as Ctrl+N/P/B above). Plain '/' is deliberately not
+      // bound at all: inside the editor it's codemirror-vim's own local
+      // search, and outside it there's nothing for a bare '/' to do.
+      if (event.ctrlKey && event.key === "/") {
         event.preventDefault();
         setSearchOpen(true);
       }

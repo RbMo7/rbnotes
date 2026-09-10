@@ -25,6 +25,10 @@ export type EditorHandle = {
 
 type Props = {
   initialContent: string;
+  // Set only when arriving from a global-search result click: the first
+  // case-insensitive occurrence of this text in `initialContent` is
+  // selected and scrolled into view once, on mount.
+  initialSearchQuery?: string | null;
   settings: Settings;
   vimEnabled: boolean;
   readOnly?: boolean;
@@ -47,6 +51,7 @@ function mapVimMode(raw: string | undefined): VimMode {
 export const Editor = forwardRef<EditorHandle, Props>(function Editor(
   {
     initialContent,
+    initialSearchQuery,
     settings,
     vimEnabled,
     readOnly = false,
@@ -140,6 +145,22 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     viewRef.current = view;
     setReady(true);
 
+    // Arrived here from a global-search result click: select the first
+    // occurrence of the query so the click actually lands on the matched
+    // text instead of just opening the note at wherever the cursor last
+    // was. Runs regardless of vimEnabled (a mobile/touch user can search
+    // and click a result too) -- only readOnly is excluded, since a shared
+    // view has no search entry point to arrive from in the first place.
+    if (initialSearchQuery && !readOnly) {
+      const idx = initialContent.toLowerCase().indexOf(initialSearchQuery.toLowerCase());
+      if (idx !== -1) {
+        view.dispatch({
+          selection: { anchor: idx, head: idx + initialSearchQuery.length },
+          scrollIntoView: true,
+        });
+      }
+    }
+
     // Opening a note (including a brand-new one from :new) should be
     // typeable immediately -- no click into the canvas first. Skipped on
     // mobile/no-vim (focusing there pops the OS keyboard just from
@@ -195,6 +216,18 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         cb.onOpenQuickSwitcher();
         return;
       }
+      // Ctrl+/ for the global (every note) search overlay -- plain '/' is
+      // left alone below so codemirror-vim's own native, in-buffer search
+      // keeps working (highlight-all + n/N, the real Vim experience).
+      // Not mode-gated, same as the other Ctrl shortcuts above: unlike ':'
+      // and '/' on their own, Ctrl+/ can't collide with a literal
+      // character typed in INSERT.
+      if (ctrl && event.key === "/") {
+        event.preventDefault();
+        event.stopPropagation();
+        cb.onOpenSearch();
+        return;
+      }
       if (ctrl && event.key.toLowerCase() === "b") {
         event.preventDefault();
         event.stopPropagation();
@@ -216,24 +249,6 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         event.preventDefault();
         event.stopPropagation();
         cb.onOpenCommandDock();
-        return;
-      }
-      if (
-        cm &&
-        event.key === "/" &&
-        !ctrl &&
-        !event.altKey &&
-        // Same NORMAL-only gate as ':' above, and for the same reason --
-        // without it, '/' from INSERT would just type a literal slash, and
-        // this would steal that. In NORMAL, '/' is otherwise
-        // codemirror-vim's own native incremental search, which isn't the
-        // design's Search overlay (title+content, not a buffer motion) --
-        // this preempts that native handling before it ever runs.
-        mapVimMode(cm.state.vim?.mode) === "NORMAL"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-        cb.onOpenSearch();
       }
     }
     view.dom.addEventListener("keydown", handleCapture, true);

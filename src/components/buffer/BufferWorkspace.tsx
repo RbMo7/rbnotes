@@ -26,6 +26,19 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   const editorRef = useRef<EditorHandle>(null);
   const isDesktop = useIsDesktop();
 
+  // Read-and-clear once per mount, same pattern as SettingsHydrator's
+  // lazy initializer: a search result click stashes {noteId, query} here
+  // right before navigating (see SearchPalette.tsx), and this is the one
+  // place that's allowed to consume it. Reading via getState() instead of
+  // the hook deliberately doesn't subscribe -- a later change to this
+  // store field (e.g. a different note's click) must not re-run this.
+  const [initialSearchQuery] = useState(() => {
+    const pending = useWorkspaceStore.getState().pendingSearchMatch;
+    if (pending?.noteId !== noteId) return null;
+    useWorkspaceStore.getState().setPendingSearchMatch(null);
+    return pending.query;
+  });
+
   const { data: notes } = useNotesQuery();
   const { updateNote, removeNote } = useNotesMutations();
   const createNote = useCreateNote();
@@ -284,6 +297,7 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
               <Editor
                 ref={editorRef}
                 initialContent={note.content}
+                initialSearchQuery={initialSearchQuery}
                 settings={settings}
                 vimEnabled={vimEnabled}
                 onChange={markDirty}

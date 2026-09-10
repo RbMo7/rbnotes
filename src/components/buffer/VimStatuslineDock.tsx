@@ -70,7 +70,10 @@ export function VimStatuslineDock({
                 <span className="text-secondary">[v]</span> Visual
               </span>
               <span>
-                <span className="text-secondary">[/]</span> Search
+                <span className="text-secondary">[/]</span> Find
+              </span>
+              <span>
+                <span className="text-secondary">[^/]</span> Global
               </span>
             </>
           ) : (
