@@ -25,12 +25,12 @@ export function AuthField({
           error ? "border-error" : "border-outline-variant"
         }`}
       >
-        <span className="pl-space-3 text-on-surface-variant select-none font-code-editor text-code-editor">
+        <span className="pl-space-3 pr-space-2 text-on-surface-variant select-none font-code-editor text-code-editor">
           {prefix}
         </span>
         <input
           id={id}
-          className="w-full bg-transparent px-space-3 py-space-2 text-on-surface placeholder-on-surface-variant/40 font-code-editor text-code-editor outline-none border-none appearance-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 shadow-none"
+          className="w-full bg-transparent pl-0 pr-space-3 py-space-2 text-on-surface placeholder-on-surface-variant/40 font-code-editor text-code-editor outline-none border-none appearance-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 shadow-none"
           {...inputProps}
         />
       </div>
