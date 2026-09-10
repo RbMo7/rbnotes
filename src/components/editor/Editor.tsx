@@ -32,6 +32,7 @@ type Props = {
   onOpenCommandDock: () => void;
   onNewNote: () => void;
   onOpenQuickSwitcher: () => void;
+  onOpenSearch: () => void;
   onToggleSidebar: () => void;
   onForceSave: () => void;
 };
@@ -53,6 +54,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     onOpenCommandDock,
     onNewNote,
     onOpenQuickSwitcher,
+    onOpenSearch,
     onToggleSidebar,
     onForceSave,
   },
@@ -76,6 +78,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     onOpenCommandDock,
     onNewNote,
     onOpenQuickSwitcher,
+    onOpenSearch,
     onToggleSidebar,
     onForceSave,
   });
@@ -83,6 +86,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     onOpenCommandDock,
     onNewNote,
     onOpenQuickSwitcher,
+    onOpenSearch,
     onToggleSidebar,
     onForceSave,
   };
@@ -212,6 +216,24 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         event.preventDefault();
         event.stopPropagation();
         cb.onOpenCommandDock();
+        return;
+      }
+      if (
+        cm &&
+        event.key === "/" &&
+        !ctrl &&
+        !event.altKey &&
+        // Same NORMAL-only gate as ':' above, and for the same reason --
+        // without it, '/' from INSERT would just type a literal slash, and
+        // this would steal that. In NORMAL, '/' is otherwise
+        // codemirror-vim's own native incremental search, which isn't the
+        // design's Search overlay (title+content, not a buffer motion) --
+        // this preempts that native handling before it ever runs.
+        mapVimMode(cm.state.vim?.mode) === "NORMAL"
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        cb.onOpenSearch();
       }
     }
     view.dom.addEventListener("keydown", handleCapture, true);

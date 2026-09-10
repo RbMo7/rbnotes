@@ -74,6 +74,7 @@ export function SharedNoteView({
             onOpenCommandDock={() => {}}
             onNewNote={() => {}}
             onOpenQuickSwitcher={() => {}}
+            onOpenSearch={() => {}}
             onToggleSidebar={() => {}}
             onForceSave={() => {}}
           />

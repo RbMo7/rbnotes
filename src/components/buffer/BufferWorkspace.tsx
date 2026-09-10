@@ -56,6 +56,7 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   const setMobileSidebarOpen = useWorkspaceStore((s) => s.setMobileSidebarOpen);
   const mobileSidebarOpen = useWorkspaceStore((s) => s.mobileSidebarOpen);
   const setQuickSwitcherOpen = useWorkspaceStore((s) => s.setQuickSwitcherOpen);
+  const setSearchOpen = useWorkspaceStore((s) => s.setSearchOpen);
   const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);
 
   // Per-note local state (helpOpen, shareToken, shareViewers) resets for
@@ -289,6 +290,7 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
                 onOpenCommandDock={() => setCommandDockOpen(true)}
                 onNewNote={createNote}
                 onOpenQuickSwitcher={() => setQuickSwitcherOpen(true)}
+                onOpenSearch={() => setSearchOpen(true)}
                 onToggleSidebar={() => {
                   if (isDesktop) toggleSidebar();
                   else setMobileSidebarOpen(!mobileSidebarOpen);
