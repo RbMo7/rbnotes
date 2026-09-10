@@ -14,11 +14,13 @@ function isTypingInField(target: EventTarget | null): boolean {
  *
  * `commands` is what makes the ex-command chips shown on each screen's
  * submit button (`[:wq]`, `[:new]`, `[:w]`) real rather than decorative:
- * press `:` anywhere outside a text field (leaving a field first is the
- * form-UI equivalent of leaving insert mode) to open a command line right
- * in the title bar, type the command, Enter to run it, Escape to cancel --
- * the same command-line surface the real editor uses, not a literal
- * key-combo shortcut.
+ * `:` opens a command line right in the title bar, type the command, Enter
+ * to run it -- the same command-line surface the real editor uses, not a
+ * literal key-combo shortcut. Mapping "focused in a field" to Vim's insert
+ * mode, `:` only ever fires outside one, and Escape while focused in a
+ * field blurs it -- exactly Vim's own Escape (leave insert mode; it never
+ * discards what you typed), which is what lets `:` reach the command line
+ * next without an extra manual click or Tab out of the field.
  */
 export function TerminalWindow({
   titleBarLabel,
@@ -36,7 +38,14 @@ export function TerminalWindow({
 
     function handleKeydown(event: KeyboardEvent) {
       if (typed === null) {
-        if (event.key === ":" && !isTypingInField(event.target)) {
+        if (isTypingInField(event.target)) {
+          // Escape here is Vim's own: leave insert mode, keep what you
+          // typed. Blurring is what lets `:` reach the command line on the
+          // very next keystroke, with no extra click or Tab needed.
+          if (event.key === "Escape") (event.target as HTMLElement).blur();
+          return;
+        }
+        if (event.key === ":") {
           event.preventDefault();
           setTyped("");
         }

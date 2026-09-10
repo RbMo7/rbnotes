@@ -73,6 +73,25 @@ describe("TerminalWindow ex-commands", () => {
     expect(screen.queryByText(":")).toBeNull();
   });
 
+  it("Escape blurs a focused field (leaves insert mode) so `:` reaches the command line next", () => {
+    const wq = vi.fn();
+    render(
+      <TerminalWindow titleBarLabel="AUTH.BUFFER" commands={{ wq }}>
+        <input aria-label="email" />
+      </TerminalWindow>,
+    );
+
+    const input = screen.getByLabelText("email");
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(document.activeElement).not.toBe(input);
+
+    fireEvent.keyDown(document, { key: ":" });
+    expect(screen.getByText(":")).toBeTruthy();
+  });
+
   it("does nothing when no commands prop is given", () => {
     render(<TerminalWindow titleBarLabel="AUTH.BUFFER">Hello</TerminalWindow>);
     fireEvent.keyDown(document, { key: ":" });
