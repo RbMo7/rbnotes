@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import type { NoteRecord } from "@/lib/note-types";
 import { useWorkspaceStore } from "@/lib/store";
 
@@ -43,9 +43,15 @@ describe("RecentNotesList", () => {
     expect(screen.queryByText("archived-note.md")).toBeNull();
   });
 
-  it("focuses the list on mount so j/k and arrows work with no prior click", () => {
+  it("focuses the list on mount so j/k and arrows work with no prior click", async () => {
+    // Deferred two animation frames past mount -- see the effect's own doc
+    // comment: this is what wins against Next's App Router scroll/focus
+    // handler on a client-side navigation (e.g. right after login), which
+    // runs at layout-effect timing and would otherwise steal focus back.
     render(<RecentNotesList />);
-    expect(screen.getByRole("listbox")).toBe(document.activeElement);
+    await waitFor(() => {
+      expect(screen.getByRole("listbox")).toBe(document.activeElement);
+    });
   });
 
   it("j/k move the highlight and Enter opens the highlighted note", () => {

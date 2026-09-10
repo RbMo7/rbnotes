@@ -36,6 +36,7 @@ export function RecentNotesList() {
   const [highlight, setHighlight] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const rafRef = useRef<number>(0);
 
   const isGlobal = filter.startsWith("/");
   const filtered = useMemo(() => {
@@ -49,8 +50,23 @@ export function RecentNotesList() {
     setHighlight(0);
   }, []);
 
+  // Landing here via router.push (e.g. right after login) arms Next's own
+  // App Router scroll/focus-restoration handler -- it runs at layout-effect
+  // timing (synchronous, before paint, and can re-fire on a later update),
+  // which outraces and can steal back a focus() called from a plain effect
+  // here. A full reload never arms that handler at all, which is why this
+  // only ever showed up after a client-side navigation. Deferring two
+  // animation frames pushes past both its initial run and the paint cycle
+  // it runs in, so this call reliably wins and stays won.
   useEffect(() => {
-    listRef.current?.focus();
+    const raf1 = requestAnimationFrame(() => {
+      const raf2 = requestAnimationFrame(() => {
+        listRef.current?.focus();
+      });
+      rafRef.current = raf2;
+    });
+    rafRef.current = raf1;
+    return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
   function openHighlighted() {
