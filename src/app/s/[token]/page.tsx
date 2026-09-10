@@ -1,7 +1,14 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getAuthedUser } from "@/lib/auth";
 import { resolveShareToken, recordShareView } from "@/lib/shares";
 import { SharedNoteView } from "@/components/buffer/SharedNoteView";
+
+// A shared note's whole point is a private, unguessable link -- never
+// something to surface in search results, regardless of who has the URL.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 export default async function SharedNotePage({
   params,

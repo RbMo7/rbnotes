@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { QueryClient, dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { getAuthedUser } from "@/lib/auth";
 import { listAllNotesMeta } from "@/lib/notes";
@@ -11,6 +12,14 @@ import { notesQueryKey } from "@/lib/note-types";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { SettingsHydrator } from "@/components/shell/SettingsHydrator";
 import { WorkspaceProvider } from "@/components/workspace/WorkspaceProvider";
+
+// Everything under this layout is a signed-in user's private workspace --
+// never meant to be indexed, regardless of what robots.ts already tells
+// crawlers not to fetch. Applies to every route in this group (/, /notes/*,
+// /settings) since Next.js metadata is inherited down from a layout.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthedUser();

@@ -8,11 +8,33 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ["400", "500", "600", "700"],
 });
 
+const SITE_URL = "https://note.rbmo.xyz";
+const SITE_NAME = "RbNotes";
+const SITE_DESCRIPTION =
+  "A minimalist, Vim-first notes app. Notes are buffers: :w to save, :q to leave, / to search -- no mouse required.";
+
 export const metadata: Metadata = {
-  title: "RbNotes",
-  description: "A minimalist, Vim-first note-taking application.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: SITE_NAME,
+    template: `%s · ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
   icons: {
     icon: "/logo.svg",
+  },
+  openGraph: {
+    type: "website",
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
   },
 };
 
