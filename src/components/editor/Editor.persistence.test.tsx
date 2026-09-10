@@ -131,6 +131,21 @@ describe("Editor -- one view, many documents (issue: persistent workspace shell)
     expect(ref.current?.getContentFor("never-opened")).toBeNull();
   });
 
+  it("regression (stale-save guard): getContentFor(activeNoteId) reflects a live, unsaved edit without switching away first", () => {
+    // Autosave and :w/Ctrl+S both call getContentFor(activeNoteId) -- if
+    // this ever read the cached per-note state instead of the live view for
+    // the *active* note, every save would silently persist whatever the
+    // buffer looked like at activation, dropping every keystroke since.
+    const ref = createRef<EditorHandle>();
+    render(
+      <Editor ref={ref} noteId="a" content="hello world" settings={defaultSettings} vimEnabled onChange={() => {}} />,
+    );
+
+    mountedView().dispatch({ changes: { from: "hello world".length, insert: " -- typed just now" } });
+
+    expect(ref.current?.getContentFor("a")).toBe("hello world -- typed just now");
+  });
+
   it("a vimEnabled/readOnly regeneration (e.g. a desktop<->mobile breakpoint flip) loses undo history but never the live text itself", () => {
     const ref = createRef<EditorHandle>();
     const { rerender } = render(

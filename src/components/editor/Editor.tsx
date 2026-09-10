@@ -243,7 +243,18 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     () => ({
       focus: () => viewRef.current?.focus(),
       getContent: () => viewRef.current?.state.doc.toString() ?? "",
-      getContentFor: (id: string) => statesRef.current.get(id)?.doc.toString() ?? null,
+      // The active note's cached EditorState in statesRef is a stale
+      // snapshot from whenever it was last (re)activated -- CodeMirror's
+      // dispatch() produces a new state object on every keystroke without
+      // writing it back into the map; only switching *away* from a note
+      // does that (see the switch-path effect below). Reading the map for
+      // the currently active id would hand autosave/`:w` whatever the
+      // buffer looked like at activation, silently dropping every edit
+      // made since -- read the live view instead for exactly that id.
+      getContentFor: (id: string) =>
+        id === activeIdRef.current
+          ? (viewRef.current?.state.doc.toString() ?? null)
+          : (statesRef.current.get(id)?.doc.toString() ?? null),
       replaceFirstH1,
       execVimEx,
     }),
