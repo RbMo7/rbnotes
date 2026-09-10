@@ -148,11 +148,3 @@ export function useCreateNote() {
     return note.id;
   }, [addNote]);
 }
-
-/** Position among the user's notes by creation order, for the "buffer #N" chip -- computed client-side from the already-loaded list instead of a DB count query. */
-export function computeBufferNumber(notes: NoteRecord[], noteId: string): number {
-  const target = notes.find((n) => n.id === noteId);
-  if (!target) return 1;
-  const targetTime = new Date(target.createdAt).getTime();
-  return notes.filter((n) => new Date(n.createdAt).getTime() <= targetTime).length;
-}

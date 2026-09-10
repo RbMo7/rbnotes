@@ -6,8 +6,16 @@ import { EditorView } from "@codemirror/view";
 import { getCM, Vim } from "@replit/codemirror-vim";
 import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { defaultSettings } from "@/lib/schemas";
+import { useWorkspaceStore } from "@/lib/store";
 
 afterEach(cleanup);
+
+function mountedView(): EditorView {
+  const dom = document.querySelector(".cm-editor");
+  const view = EditorView.findFromDOM(dom as HTMLElement);
+  if (!view) throw new Error("no mounted EditorView");
+  return view;
+}
 
 describe("Editor / vim `/` search prompt", () => {
   it(
@@ -70,5 +78,59 @@ describe("Editor / vim `/` search prompt", () => {
     contentEditable.dispatchEvent(
       new KeyboardEvent("keydown", { key: "/", bubbles: true, cancelable: true }),
     );
+  });
+});
+
+describe("Editor / vim mode tracking (NORMAL/INSERT/VISUAL badges)", () => {
+  it("regression (setState destroys the vim engine): entering INSERT/VISUAL mode updates the store for the first note, not just the very first keypress ever", () => {
+    const ref = createRef<EditorHandle>();
+    render(
+      <Editor ref={ref} noteId="a" content="hello" settings={defaultSettings} vimEnabled onChange={() => {}} />,
+    );
+    const cm = getCM(mountedView()) as Parameters<typeof Vim.handleKey>[0];
+
+    Vim.handleKey(cm, "i", "user");
+    expect(useWorkspaceStore.getState().mode).toBe("INSERT");
+
+    Vim.handleKey(cm, "<Esc>", "user");
+    expect(useWorkspaceStore.getState().mode).toBe("NORMAL");
+
+    Vim.handleKey(cm, "v", "user");
+    expect(useWorkspaceStore.getState().mode).toBe("VISUAL");
+  });
+
+  it("regression (setState destroys the vim engine): mode tracking still works after switching to a different note", () => {
+    // The bug: CodeMirror's view.setState() -- called on every note switch
+    // -- unconditionally destroys and recreates every ViewPlugin, including
+    // @replit/codemirror-vim's, even though the same vim() extension value
+    // is reused. A vim-mode-change listener registered once (at Editor
+    // mount) was listening on the very first, already-destroyed engine by
+    // the time the first real note activated -- every mode badge in the
+    // app was permanently stuck showing NORMAL.
+    const ref = createRef<EditorHandle>();
+    const { rerender } = render(
+      <Editor ref={ref} noteId="a" content="hello" settings={defaultSettings} vimEnabled onChange={() => {}} />,
+    );
+    rerender(
+      <Editor ref={ref} noteId="b" content="world" settings={defaultSettings} vimEnabled onChange={() => {}} />,
+    );
+
+    const cm = getCM(mountedView()) as Parameters<typeof Vim.handleKey>[0];
+    Vim.handleKey(cm, "i", "user");
+    expect(useWorkspaceStore.getState().mode).toBe("INSERT");
+  });
+
+  it("switching buffers resets the mode to NORMAL, matching real Vim's own buffer-switch behavior", () => {
+    const ref = createRef<EditorHandle>();
+    const { rerender } = render(
+      <Editor ref={ref} noteId="a" content="hello" settings={defaultSettings} vimEnabled onChange={() => {}} />,
+    );
+    Vim.handleKey(getCM(mountedView()) as Parameters<typeof Vim.handleKey>[0], "i", "user");
+    expect(useWorkspaceStore.getState().mode).toBe("INSERT");
+
+    rerender(
+      <Editor ref={ref} noteId="b" content="world" settings={defaultSettings} vimEnabled onChange={() => {}} />,
+    );
+    expect(useWorkspaceStore.getState().mode).toBe("NORMAL");
   });
 });

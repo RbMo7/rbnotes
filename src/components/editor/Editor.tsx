@@ -129,6 +129,49 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
   const onIntentRef = useRef(onIntent);
   onIntentRef.current = onIntent;
 
+  /**
+   * Must be called after *every* `view.setState(...)` (not just once at
+   * view creation): CodeMirror's `EditorView.setState` unconditionally
+   * destroys and recreates every ViewPlugin, including @replit/codemirror-vim's,
+   * even when the exact same `vim()` extension value is present in both
+   * states -- plugin instance reuse across a state change is a `dispatch()`
+   * transaction optimization only (`updatePlugins` diffs specs by
+   * identity), `setState` has no equivalent path (see its source: an
+   * unconditional `for (plugin of this.plugins) plugin.destroy(this)`
+   * followed by fresh `new PluginInstance(spec)` for all of them). A
+   * `vim-mode-change` listener registered once at creation therefore goes
+   * silently stale the moment the very first `setState()` runs -- it's
+   * listening on an already-destroyed engine that will never fire again.
+   * The freshly (re)created engine also always starts in Normal mode,
+   * which conveniently matches real Vim's own "switching buffers resets to
+   * Normal" behavior, but the store has to be told explicitly since
+   * nothing else will.
+   */
+  const wireVimMode = useCallback(
+    (view: EditorView) => {
+      if (!vimEnabled || readOnly) return;
+      const cm = getCM(view);
+      if (!cm) return;
+      setMode(mapVimMode(cm.state.vim?.mode));
+      cm.on("vim-mode-change", (e: { mode?: string }) => {
+        const next = mapVimMode(e.mode);
+        setMode(next);
+        // vim-mode-change fires synchronously from inside the vim plugin's
+        // own update handling -- CodeMirror throws ("Calls to
+        // EditorView.update are not allowed while an update is in
+        // progress") on a reentrant dispatch() here, which destroys the
+        // vim plugin outright. Deferring one microtask lets the in-flight
+        // update finish first.
+        queueMicrotask(() => {
+          if (viewRef.current === view) {
+            view.dispatch({ effects: themeCompartment.reconfigure(rbnotesTheme(next)) });
+          }
+        });
+      });
+    },
+    [vimEnabled, readOnly, setMode, themeCompartment],
+  );
+
   const replaceFirstH1 = useCallback((title: string) => {
     const view = viewRef.current;
     if (!view) return;
@@ -228,11 +271,12 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     ];
 
     // Created once per view generation and reused identically for every
-    // note's EditorState -- CodeMirror only keeps a ViewPlugin's instance
-    // (and with it, @replit/codemirror-vim's registers/marks, which are
-    // meant to be global across buffers just like real Vim) alive across a
-    // setState swap when the same extension value is present in both
-    // states.
+    // note's EditorState -- extensions have to be byte-identical across
+    // every per-note state or CodeMirror would treat each switch as a
+    // config change on top of a document change. This does NOT, however,
+    // keep the vim ViewPlugin instance (or its registers/marks) alive
+    // across a setState() swap -- see wireVimMode's doc for why that
+    // assumption turned out to be wrong.
     if (vimEnabled && !readOnly) {
       extensions.unshift(vim({ status: false }));
     }
@@ -247,38 +291,25 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     viewRef.current = view;
     setReady(true);
 
-    const cm = vimEnabled && !readOnly ? getCM(view) : null;
-
-    if (cm) {
-      cm.on("vim-mode-change", (e: { mode?: string }) => {
-        const next = mapVimMode(e.mode);
-        setMode(next);
-        // vim-mode-change fires synchronously from inside the vim plugin's
-        // own update handling -- CodeMirror throws ("Calls to
-        // EditorView.update are not allowed while an update is in
-        // progress") on a reentrant dispatch() here, which destroys the
-        // vim plugin outright. Deferring one microtask lets the in-flight
-        // update finish first.
-        queueMicrotask(() => {
-          if (viewRef.current === view) {
-            view.dispatch({ effects: themeCompartment.reconfigure(rbnotesTheme(next)) });
-          }
-        });
-      });
-    }
+    wireVimMode(view);
 
     // Capture-phase so this always wins over @replit/codemirror-vim's own
     // key handling on view.dom's descendants (contentDOM). One table decides
     // what each chord means (see shortcuts.ts) -- the shell has its own
     // adapter for when focus is outside the editor.
     function handleCapture(event: KeyboardEvent) {
-      // Read the vim engine's own live mode rather than a mirrored ref --
-      // if a vim-mode-change event were ever missed, a mirrored value could
-      // drift and get ':' stuck working in the wrong mode. This is the
-      // actual source of truth CodeMirror-vim itself uses. With vim off
+      // Read the vim engine's own live mode fresh, not a closed-over `cm`
+      // -- setState() (every note switch) recreates the vim engine from
+      // scratch (see wireVimMode's doc), so a `cm` captured once here would
+      // go stale the moment the first switch happened, exactly like the
+      // vim-mode-change listener did before this was fixed. Falling back
+      // to a mirrored ref would have the same staleness risk if a
+      // vim-mode-change event were ever missed; reading CodeMirror-vim's
+      // own live state is the actual source of truth. With vim off
       // (mobile/EDIT) there is no engine, so mode is EDIT and the
       // mode-gated rows simply don't match.
-      const liveMode: VimMode | null = cm ? mapVimMode(cm.state.vim?.mode) : "EDIT";
+      const liveCm = vimEnabled && !readOnly ? getCM(view) : null;
+      const liveMode: VimMode | null = liveCm ? mapVimMode(liveCm.state.vim?.mode) : "EDIT";
       const intent = matchGlobalShortcut(event, liveMode);
       if (!intent) return;
       event.preventDefault();
@@ -357,6 +388,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       // id, and activeIdRef becomes null, so the updateListener's onChange
       // has nothing to attribute a stray edit to even if focus lingers).
       view.setState(EditorState.create({ doc: "", extensions: sharedExtensionsRef.current ?? [] }));
+      wireVimMode(view);
       activeIdRef.current = null;
       view.contentDOM.blur();
       return;
@@ -374,6 +406,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       statesRef.current.set(noteId, state);
     }
     view.setState(state);
+    wireVimMode(view);
     activeIdRef.current = noteId;
     view.scrollDOM.scrollTop = scrollRef.current.get(noteId) ?? 0;
 
@@ -384,7 +417,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     // without them here too, this effect would keep comparing against its
     // *last* noteId/content and, finding neither changed, never re-run to
     // populate the new view at all.
-  }, [noteId, content, ready, vimEnabled, readOnly]);
+  }, [noteId, content, ready, vimEnabled, readOnly, wireVimMode]);
 
   // Arrived at the active buffer from a global-search result click: select
   // the first occurrence of the query. Independent of the switch effect

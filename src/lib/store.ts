@@ -68,6 +68,16 @@ type WorkspaceState = {
   activeFilename: string | null;
   setActiveFilename: (name: string | null) => void;
 
+  // The rest of the buffer sub-header's old detail line (created date, word
+  // count, SHA hash), now shown in the footer instead -- the header itself
+  // is just the title. Derived values, not raw content: the store
+  // deliberately never holds note content (see the module doc), and word
+  // count/hash only need to be as fresh as note.content already is (i.e.
+  // last-saved, not live-per-keystroke -- same staleness the old header
+  // had). Null outside a note buffer, or while it's still cold.
+  activeBufferInfo: { wordCount: number; hash: string; createdAt: string } | null;
+  setActiveBufferInfo: (info: WorkspaceState["activeBufferInfo"]) => void;
+
   // Editor display settings. Seeded once from the server at the top of the
   // (app) layout (SettingsHydrator) so both the Settings page and every
   // open note read and write the exact same values -- changing a setting
@@ -135,6 +145,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
 
   activeFilename: null,
   setActiveFilename: (activeFilename) => set({ activeFilename }),
+
+  activeBufferInfo: null,
+  setActiveBufferInfo: (activeBufferInfo) => set({ activeBufferInfo }),
 
   settings: defaultSettings,
   setSettings: (settings) => set({ settings }),

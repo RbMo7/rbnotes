@@ -26,13 +26,8 @@ import { useNoteOperations } from "@/components/buffer/use-note-operations";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useWorkspaceStore, isNoteDirty } from "@/lib/store";
 import { useIsDesktop } from "@/lib/use-is-desktop";
-import { displayFilename } from "@/lib/format";
-import {
-  useNotesQuery,
-  useNotesMutations,
-  computeBufferNumber,
-  warmNoteContent,
-} from "@/lib/notes-query";
+import { displayFilename, formatWordCount, shortHash } from "@/lib/format";
+import { useNotesQuery, useNotesMutations, warmNoteContent } from "@/lib/notes-query";
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
 import { saveSettingsAction } from "@/server/actions/settings";
 import type { Settings } from "@/lib/schemas";
@@ -73,6 +68,7 @@ export function WorkspaceBuffer() {
   const setInspectorOpen = useWorkspaceStore((s) => s.setInspectorOpen);
   const toggleInspector = useWorkspaceStore((s) => s.toggleInspector);
   const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);
+  const setActiveBufferInfo = useWorkspaceStore((s) => s.setActiveBufferInfo);
   const saveState = useWorkspaceStore((s) => s.saveState);
 
   // The editor's own listener produces intents; this is the one dispatcher
@@ -102,6 +98,19 @@ export function WorkspaceBuffer() {
     setActiveFilename(displayFilename(note.title));
     return () => setActiveFilename(null);
   }, [note?.title, setActiveFilename]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!note || note.content === undefined) {
+      setActiveBufferInfo(null);
+      return;
+    }
+    setActiveBufferInfo({
+      wordCount: formatWordCount(note.content),
+      hash: shortHash(note.content),
+      createdAt: note.createdAt,
+    });
+    return () => setActiveBufferInfo(null);
+  }, [note?.content, note?.createdAt, setActiveBufferInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cold-open: jump the warm-up queue for whichever buffer is active and
   // still cold. warmNoteContent is idempotent (a no-op if already
@@ -284,7 +293,6 @@ export function WorkspaceBuffer() {
   }
 
   const vimEnabled = isDesktop;
-  const bufferNumber = computeBufferNumber(notes, activeNoteId);
   const cold = note.content === undefined;
 
   return (
@@ -292,13 +300,7 @@ export function WorkspaceBuffer() {
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="w-full px-space-4 sm:px-space-8 pt-space-4 sm:pt-space-2 flex-1 flex flex-col min-h-0">
           <div className="flex items-center mb-space-4 shrink-0">
-            <BufferHeaderNormal
-              title={note.title}
-              content={note.content ?? ""}
-              bufferNumber={bufferNumber}
-              createdAt={new Date(note.createdAt)}
-              onToggleInspector={toggleInspector}
-            />
+            <BufferHeaderNormal title={note.title} onToggleInspector={toggleInspector} />
           </div>
 
           <div className="w-full flex-1 min-h-[320px] relative bg-surface-dim overflow-hidden rounded-lg">
@@ -322,7 +324,7 @@ export function WorkspaceBuffer() {
           </div>
 
           {vimEnabled ? (
-            <VimStatuslineDock title={note.title} onSave={() => void write()} />
+            <VimStatuslineDock onSave={() => void write()} />
           ) : (
             <QuickActionsStrip onSave={() => void write()} />
           )}

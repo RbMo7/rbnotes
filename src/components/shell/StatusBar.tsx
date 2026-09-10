@@ -1,6 +1,7 @@
 "use client";
 
 import { useWorkspaceStore, type VimMode } from "@/lib/store";
+import { formatRelativeCreated } from "@/lib/format";
 
 // Both real Stitch screenshots (NORMAL and INSERT) render this exact pill in
 // solid `bg-primary`/`text-on-primary` — only the label changes between
@@ -20,6 +21,7 @@ export function StatusBar({ filename }: { filename: string | null }) {
   const saveState = useWorkspaceStore((s) => s.saveState);
   const cursorLine = useWorkspaceStore((s) => s.cursorLine);
   const cursorCol = useWorkspaceStore((s) => s.cursorCol);
+  const bufferInfo = useWorkspaceStore((s) => s.activeBufferInfo);
 
   return (
     <footer className="fixed bottom-0 left-0 right-0 h-status-bar-height bg-surface-container-high border-t border-outline-variant/40 z-50 flex items-center justify-between px-space-4 font-label-sm text-label-sm">
@@ -43,6 +45,14 @@ export function StatusBar({ filename }: { filename: string | null }) {
         </div>
       </div>
       <div className="hidden sm:flex items-center gap-space-4 text-on-surface-variant shrink-0">
+        {bufferInfo && (
+          <>
+            <span>created {formatRelativeCreated(new Date(bufferInfo.createdAt))}</span>
+            <span>|</span>
+            <span>{bufferInfo.wordCount} words</span>
+            <span>|</span>
+          </>
+        )}
         <span>markdown</span>
         <span>|</span>
         <span>utf-8</span>
@@ -50,6 +60,14 @@ export function StatusBar({ filename }: { filename: string | null }) {
         <span>
           Ln {cursorLine}, Col {cursorCol}
         </span>
+        {bufferInfo && (
+          <>
+            <span>|</span>
+            <span>
+              SHA: <code className="text-on-surface">{bufferInfo.hash}</code>
+            </span>
+          </>
+        )}
         <span>|</span>
         <span className="text-outline">100%</span>
       </div>
