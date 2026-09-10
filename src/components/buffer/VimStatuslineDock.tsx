@@ -15,6 +15,11 @@ export function VimStatuslineDock({
   const saveState = useWorkspaceStore((s) => s.saveState);
   const dirty = saveState !== "clean";
   const now = new Date();
+  // `:` only opens the command line from NORMAL (Editor.tsx checks the vim
+  // engine's own live mode before intercepting it) -- in INSERT/VISUAL it's
+  // just a literal character, so the hint row swaps to the one command
+  // that actually applies there instead of advertising a dead key.
+  const isNormal = mode === "NORMAL";
 
   return (
     <div className="w-full mt-space-4 bg-surface-container-highest text-on-surface rounded overflow-hidden">
@@ -42,21 +47,37 @@ export function VimStatuslineDock({
       </div>
       <div className="bg-surface-container-low px-space-3 py-space-2 flex flex-col md:flex-row md:items-center justify-between gap-space-2">
         <div className="flex items-center gap-space-2 font-code-editor text-body-sm text-primary">
-          <span className="font-bold">:</span>
-          <span className="text-outline font-label-sm text-label-sm">
-            press &lsquo;:&rsquo; to open the command line
-          </span>
+          {isNormal ? (
+            <>
+              <span className="font-bold">:</span>
+              <span className="text-outline font-label-sm text-label-sm">
+                press &lsquo;:&rsquo; to open the command line
+              </span>
+            </>
+          ) : (
+            <span className="text-outline font-label-sm text-label-sm">
+              -- {mode} --
+            </span>
+          )}
         </div>
         <div className="flex items-center flex-wrap gap-space-3 font-label-sm text-label-sm text-outline">
-          <span>
-            <span className="text-secondary">[i]</span> Insert
-          </span>
-          <span>
-            <span className="text-secondary">[v]</span> Visual
-          </span>
-          <span>
-            <span className="text-secondary">[/]</span> Search
-          </span>
+          {isNormal ? (
+            <>
+              <span>
+                <span className="text-secondary">[i]</span> Insert
+              </span>
+              <span>
+                <span className="text-secondary">[v]</span> Visual
+              </span>
+              <span>
+                <span className="text-secondary">[/]</span> Search
+              </span>
+            </>
+          ) : (
+            <span>
+              <span className="text-secondary">[Esc]</span> Normal
+            </span>
+          )}
           <button
             onClick={onSave}
             className="hover:text-on-surface transition-colors cursor-pointer"

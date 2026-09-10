@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { BufferHeaderNormal } from "@/components/buffer/BufferHeaderNormal";
-import { BufferHeaderInsert } from "@/components/buffer/BufferHeaderInsert";
 import { VimStatuslineDock } from "@/components/buffer/VimStatuslineDock";
 import { QuickActionsStrip } from "@/components/buffer/QuickActionsStrip";
 import { CommandDock } from "@/components/buffer/CommandDock";
@@ -247,21 +246,20 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
     <div className="flex h-full">
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="w-full px-space-4 sm:px-space-8 pt-space-4 sm:pt-space-2 flex-1 flex flex-col min-h-0">
-          {/* Fixed-height row: NORMAL's two-line header and INSERT's
-              one-line pill row both center inside the same box, so
-              switching modes never shifts the canvas below it (§13.2). */}
-          <div className="min-h-[5.5rem] flex items-center mb-space-4 shrink-0">
-            {mode === "INSERT" ? (
-              <BufferHeaderInsert title={note.title} settings={settings} />
-            ) : (
-              <BufferHeaderNormal
-                title={note.title}
-                content={note.content}
-                bufferNumber={bufferNumber}
-                createdAt={new Date(note.createdAt)}
-                onToggleInspector={toggleInspector}
-              />
-            )}
+          {/* One header for every mode -- it never swaps, so switching
+              modes can never shift the canvas below it. The mode pill
+              inside it already reads live from the store, which is the
+              only thing that needs to change per mode (§ terminal-header
+              unification: NORMAL/VISUAL/INSERT are one buffer, not three
+              different screens). */}
+          <div className="flex items-center mb-space-4 shrink-0">
+            <BufferHeaderNormal
+              title={note.title}
+              content={note.content}
+              bufferNumber={bufferNumber}
+              createdAt={new Date(note.createdAt)}
+              onToggleInspector={toggleInspector}
+            />
           </div>
 
           {/* Canvas geometry is constant across modes -- only the
@@ -293,11 +291,7 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
           </div>
 
           {vimEnabled ? (
-            mode === "INSERT" ? (
-              <QuickActionsStrip onSave={write} />
-            ) : (
-              <VimStatuslineDock title={note.title} onSave={write} />
-            )
+            <VimStatuslineDock title={note.title} onSave={write} />
           ) : (
             <QuickActionsStrip onSave={write} />
           )}
