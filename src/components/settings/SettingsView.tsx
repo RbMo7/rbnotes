@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { saveSettingsAction } from "@/server/actions/settings";
 import { signOutAction } from "@/server/actions/auth";
+import { useWorkspaceStore } from "@/lib/store";
 import type { Settings } from "@/lib/schemas";
 
 function SettingRow({
@@ -29,23 +30,21 @@ function SettingRow({
   );
 }
 
-export function SettingsView({
-  email,
-  initialSettings,
-}: {
-  email: string;
-  initialSettings: Settings;
-}) {
-  const [settings, setSettings] = useState(initialSettings);
+export function SettingsView({ email }: { email: string }) {
+  // Shared with every open note editor (BufferWorkspace) -- changing a
+  // setting here is reflected there immediately, and vice versa, since
+  // both read the exact same store instead of independently-fetched
+  // copies of the same data.
+  const settings = useWorkspaceStore((s) => s.settings);
+  const updateStore = useWorkspaceStore((s) => s.updateSettings);
   const [saved, setSaved] = useState(true);
   const [, startTransition] = useTransition();
 
   const update = (patch: Partial<Settings>) => {
-    const next = { ...settings, ...patch };
-    setSettings(next);
+    updateStore(patch);
     setSaved(false);
     startTransition(async () => {
-      await saveSettingsAction(next);
+      await saveSettingsAction({ ...settings, ...patch });
       setSaved(true);
     });
   };

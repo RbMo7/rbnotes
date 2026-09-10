@@ -1,6 +1,5 @@
-import "server-only";
-import { db } from "@/lib/db";
 import { extractTags } from "@/lib/tags";
+import type { FullNote } from "@/lib/note-types";
 
 // [[Note Title]] wiki-links, resolved by case-insensitive title match.
 const LINK_PATTERN = /\[\[([^\]]+)\]\]/g;
@@ -8,12 +7,15 @@ const LINK_PATTERN = /\[\[([^\]]+)\]\]/g;
 export type GraphNode = { id: string; title: string };
 export type GraphEdge = { source: string; target: string; kind: "link" | "tag" };
 
-export async function buildNoteGraph(userId: string) {
-  const notes = await db.note.findMany({
-    where: { userId, deletedAt: null, archived: false },
-    select: { id: true, title: true, content: true },
-  });
-
+/**
+ * Pure and isomorphic -- no DB query. The GRAPH page runs this over the
+ * already-loaded notes-query cache client-side (same reasoning as
+ * lib/tags.ts's computeTagSummaries), so opening it is instant.
+ */
+export function buildNoteGraph(
+  allNotes: Pick<FullNote, "id" | "title" | "content" | "archived">[],
+): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  const notes = allNotes.filter((n) => !n.archived);
   const byTitle = new Map(notes.map((n) => [n.title.toLowerCase(), n.id]));
   const nodes: GraphNode[] = notes.map((n) => ({ id: n.id, title: n.title }));
   const edges: GraphEdge[] = [];

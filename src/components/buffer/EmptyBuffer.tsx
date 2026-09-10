@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { createNoteAction } from "@/server/actions/notes";
+import { useNotesMutations } from "@/lib/notes-query";
 
 /**
  * No screen in Stitch shows a zero-notes state, so this is derived strictly
@@ -11,12 +12,14 @@ import { createNoteAction } from "@/server/actions/notes";
  */
 export function EmptyBuffer() {
   const router = useRouter();
+  const { addNote } = useNotesMutations();
   const [pending, startTransition] = useTransition();
 
   const handleNewNote = () => {
     startTransition(async () => {
-      const { id } = await createNoteAction({});
-      router.push(`/notes/${id}`);
+      const note = await createNoteAction({});
+      addNote(note);
+      router.push(`/notes/${note.id}`);
     });
   };
 

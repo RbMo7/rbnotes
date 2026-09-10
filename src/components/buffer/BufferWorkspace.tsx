@@ -16,33 +16,27 @@ import { useManualSave } from "@/components/editor/use-manual-save";
 import { useWorkspaceStore } from "@/lib/store";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { displayFilename } from "@/lib/format";
+import { useNotesQuery, useNotesMutations, computeBufferNumber } from "@/lib/notes-query";
 import { setNoteFlagsAction, deleteNoteAction, createNoteAction } from "@/server/actions/notes";
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
 import { saveSettingsAction } from "@/server/actions/settings";
 import type { Settings } from "@/lib/schemas";
 
-type NoteData = {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: Date;
-};
-
-export function BufferWorkspace({
-  note,
-  bufferNumber,
-  initialSettings,
-}: {
-  note: NoteData;
-  bufferNumber: number;
-  initialSettings: Settings;
-}) {
+export function BufferWorkspace({ noteId }: { noteId: string }) {
   const router = useRouter();
   const editorRef = useRef<EditorHandle>(null);
   const isDesktop = useIsDesktop();
 
-  const [title, setTitle] = useState(note.title);
-  const [settings, setSettings] = useState(initialSettings);
+  const { data: notes } = useNotesQuery();
+  const { addNote, updateNote, removeNote } = useNotesMutations();
+  // Both scoped to this user at the one fetch that populated the cache
+  // (see (app)/layout.tsx) -- a note that doesn't exist, or belongs to
+  // someone else, simply isn't in `notes` either way. See "not found"
+  // handling below.
+  const note = notes?.find((n) => n.id === noteId);
+
+  const settings = useWorkspaceStore((s) => s.settings);
+  const setSettingsStore = useWorkspaceStore((s) => s.updateSettings);
   const [helpOpen, setHelpOpen] = useState(false);
   const [notify, setNotify] = useState<string | null>(null);
   const [notifyTone, setNotifyTone] = useState<"info" | "error">("info");
@@ -64,24 +58,29 @@ export function BufferWorkspace({
   const setQuickSwitcherOpen = useWorkspaceStore((s) => s.setQuickSwitcherOpen);
   const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);
 
-  // Per-note local state (title, helpOpen, shareToken, shareViewers) resets
-  // for free: the page renders `<BufferWorkspace key={note.id} .../>`, so
-  // React remounts this component fresh on every note switch rather than
-  // reusing it. Only the zustand-backed workspace store survives a remount
-  // (it's module state, not component state), so that's the only thing that
-  // needs an explicit reset here.
+  // Per-note local state (helpOpen, shareToken, shareViewers) resets for
+  // free: the page renders `<BufferWorkspace key={noteId} .../>`, so React
+  // remounts this component fresh on every note switch. The note's own
+  // data (title, content) no longer lives in component state at all --
+  // it's read reactively from the notes-query cache above, so there's
+  // nothing to reset for that.
   useEffect(() => {
     setMode(isDesktop === false ? "EDIT" : "NORMAL");
     setInspectorOpen(false);
   }, [isDesktop, setMode, setInspectorOpen]);
 
   useEffect(() => {
-    setActiveFilename(displayFilename(title));
+    if (!note) return;
+    setActiveFilename(displayFilename(note.title));
     return () => setActiveFilename(null);
-  }, [title, setActiveFilename]);
+  }, [note?.title, setActiveFilename]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getContent = useCallback(() => editorRef.current?.getContent() ?? "", []);
-  const { markDirty, write, isDirty } = useManualSave(note.id, getContent, setTitle);
+  const handleSaved = useCallback(
+    (info: { title: string; content: string; updatedAt: string }) => updateNote(noteId, info),
+    [noteId, updateNote],
+  );
+  const { markDirty, write, isDirty } = useManualSave(noteId, getContent, handleSaved);
 
   const showNotify = useCallback((message: string, tone: "info" | "error" = "info") => {
     setNotify(message);
@@ -91,13 +90,13 @@ export function BufferWorkspace({
 
   const loadShareInfo = useCallback(() => {
     setShareLoading(true);
-    getShareInfoAction({ noteId: note.id })
+    getShareInfoAction({ noteId })
       .then((info) => {
         setShareToken(info.share?.token ?? null);
         setShareViewers(info.viewers);
       })
       .finally(() => setShareLoading(false));
-  }, [note.id]);
+  }, [noteId]);
 
   useEffect(() => {
     // Fetches and sets share info fresh each time the inspector opens.
@@ -107,23 +106,23 @@ export function BufferWorkspace({
 
   const handleShare = useCallback(() => {
     startTransition(async () => {
-      const result = await createShareAction({ noteId: note.id });
+      const result = await createShareAction({ noteId });
       setShareToken(result.token);
       const url = `${window.location.origin}/s/${result.token}`;
       await navigator.clipboard.writeText(url).catch(() => {});
       showNotify(`SHARE: link copied — /s/${result.token.slice(0, 6)}…  [OK]`);
       setInspectorOpen(true);
     });
-  }, [note.id, showNotify, setInspectorOpen]);
+  }, [noteId, showNotify, setInspectorOpen]);
 
   const handleUnshare = useCallback(() => {
     startTransition(async () => {
-      await revokeShareAction({ noteId: note.id });
+      await revokeShareAction({ noteId });
       setShareToken(null);
       setShareViewers([]);
       showNotify("SHARE: link revoked  [OK]");
     });
-  }, [note.id, showNotify]);
+  }, [noteId, showNotify]);
 
   const handleCopyShare = useCallback(() => {
     if (!shareToken) return;
@@ -133,22 +132,20 @@ export function BufferWorkspace({
 
   const handleNewNote = useCallback(() => {
     startTransition(async () => {
-      const { id } = await createNoteAction({});
-      router.push(`/notes/${id}`);
+      const newNote = await createNoteAction({});
+      addNote(newNote);
+      router.push(`/notes/${newNote.id}`);
     });
-  }, [router]);
+  }, [router, addNote]);
 
   const updateSettings = useCallback(
     (patch: Partial<Settings>) => {
-      setSettings((prev) => {
-        const next = { ...prev, ...patch };
-        startTransition(() => {
-          saveSettingsAction(next).catch(() => {});
-        });
-        return next;
+      setSettingsStore(patch);
+      startTransition(() => {
+        saveSettingsAction({ ...settings, ...patch }).catch(() => {});
       });
     },
-    [],
+    [settings, setSettingsStore],
   );
 
   const commandContext: CommandContext = {
@@ -177,17 +174,22 @@ export function BufferWorkspace({
     // `#` heading, then persisting) happens in command-dispatch.ts, which
     // has direct access to the CodeMirror view -- a note's title is that
     // heading, not separate metadata (see lib/markdown-title.ts). This is
-    // just the optimistic local update so the header/sidebar filename
+    // just the optimistic cache update so the header/sidebar filename
     // reflect it instantly, ahead of the save round-trip's own
     // authoritative title.
     rename: (newTitle) => {
-      setTitle(newTitle);
+      updateNote(noteId, { title: newTitle });
       showNotify(`RENAME: "${displayFilename(newTitle)}" written  [OK]`);
     },
     deleteNote: (hard) => {
       startTransition(async () => {
-        if (hard) await deleteNoteAction({ noteId: note.id });
-        else await setNoteFlagsAction({ noteId: note.id, archived: true });
+        if (hard) {
+          await deleteNoteAction({ noteId });
+          removeNote(noteId);
+        } else {
+          await setNoteFlagsAction({ noteId, archived: true });
+          updateNote(noteId, { archived: true });
+        }
         router.push("/notes");
       });
     },
@@ -221,6 +223,24 @@ export function BufferWorkspace({
     [setCommandDockOpen],
   );
 
+  // notes is undefined only on a genuine cache miss (should be rare -- the
+  // layout always prefetches it); note is undefined when the id doesn't
+  // exist or isn't this user's, which the cache can't distinguish and
+  // deliberately doesn't try to (see notes/[id]/page.tsx).
+  if (!notes) {
+    return <div className="w-full px-space-8 pt-space-8" />;
+  }
+  if (!note) {
+    return (
+      <div className="w-full px-space-8 pt-space-8 font-code-editor text-code-editor">
+        <p className="text-error">E484: no such buffer</p>
+        <button onClick={() => router.push("/notes")} className="mt-space-2 text-primary hover:underline">
+          ← back to notes
+        </button>
+      </div>
+    );
+  }
+
   if (isDesktop === null) {
     // Briefly unknown on first client paint; avoids mounting CodeMirror
     // with the wrong keymap and immediately remounting it.
@@ -228,6 +248,7 @@ export function BufferWorkspace({
   }
 
   const vimEnabled = isDesktop;
+  const bufferNumber = computeBufferNumber(notes, noteId);
 
   return (
     <div className="flex h-full">
@@ -238,13 +259,13 @@ export function BufferWorkspace({
               switching modes never shifts the canvas below it (§13.2). */}
           <div className="min-h-[5.5rem] flex items-center mb-space-4 shrink-0">
             {mode === "INSERT" ? (
-              <BufferHeaderInsert title={title} settings={settings} />
+              <BufferHeaderInsert title={note.title} settings={settings} />
             ) : (
               <BufferHeaderNormal
-                title={title}
+                title={note.title}
                 content={note.content}
                 bufferNumber={bufferNumber}
-                createdAt={note.createdAt}
+                createdAt={new Date(note.createdAt)}
                 onToggleInspector={toggleInspector}
               />
             )}
@@ -282,7 +303,7 @@ export function BufferWorkspace({
             mode === "INSERT" ? (
               <QuickActionsStrip onSave={write} />
             ) : (
-              <VimStatuslineDock title={title} onSave={write} />
+              <VimStatuslineDock title={note.title} onSave={write} />
             )
           ) : (
             <QuickActionsStrip onSave={write} />

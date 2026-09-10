@@ -6,24 +6,33 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Search, Settings } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
-import { groupNotes, type SidebarNote } from "@/lib/grouping";
+import { groupNotes } from "@/lib/grouping";
 import { NoteListItem } from "@/components/shell/NoteListItem";
 import { createNoteAction } from "@/server/actions/notes";
+import { useNotesQuery, useNotesMutations } from "@/lib/notes-query";
 
-export function Sidebar({ notes }: { notes: SidebarNote[] }) {
+export function Sidebar() {
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);
   const mobileOpen = useWorkspaceStore((s) => s.mobileSidebarOpen);
   const setMobileOpen = useWorkspaceStore((s) => s.setMobileSidebarOpen);
   const setSearchOpen = useWorkspaceStore((s) => s.setSearchOpen);
-  const groups = groupNotes(notes);
+  const { data: notes = [] } = useNotesQuery();
+  const { addNote } = useNotesMutations();
+  // Content is already fully loaded client-side (see lib/notes-query.ts),
+  // so grouping/sorting here is a pure in-memory computation -- the same
+  // reason tags and graph don't fetch anything on click either.
+  const groups = groupNotes(
+    notes.map((n) => ({ ...n, updatedAt: new Date(n.updatedAt) })),
+  );
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const pathname = usePathname();
 
   const handleNewNote = () => {
     startTransition(async () => {
-      const { id } = await createNoteAction({});
-      router.push(`/notes/${id}`);
+      const note = await createNoteAction({});
+      addNote(note);
+      router.push(`/notes/${note.id}`);
       setMobileOpen(false);
     });
   };

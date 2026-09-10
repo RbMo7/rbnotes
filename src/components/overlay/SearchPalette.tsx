@@ -1,14 +1,12 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
 import { displayFilename } from "@/lib/format";
-import { searchNotesAction } from "@/server/actions/notes";
-
-type Result = { id: string; title: string; content: string; updatedAt: Date };
+import { useNotesQuery } from "@/lib/notes-query";
 
 function matchedLine(content: string, query: string): string | null {
   const q = query.toLowerCase();
@@ -29,31 +27,32 @@ function highlight(text: string, query: string) {
   );
 }
 
-/** `/` from anywhere outside the editor -- searches note titles and content. */
+/**
+ * `/` from anywhere outside the editor -- searches note titles and content.
+ * Filters the already-loaded notes-query cache in memory instead of
+ * calling the server per keystroke, so results are instant with no
+ * debounce needed.
+ */
 export function SearchPalette() {
   const open = useWorkspaceStore((s) => s.searchOpen);
   const setOpen = useWorkspaceStore((s) => s.setSearchOpen);
+  const { data: notes = [] } = useNotesQuery();
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Result[]>([]);
-  const [, startTransition] = useTransition();
 
-  useEffect(() => {
-    if (!open) return;
-    const handle = setTimeout(() => {
-      startTransition(async () => {
-        const r = await searchNotesAction(query);
-        setResults(r);
-      });
-    }, 150);
-    return () => clearTimeout(handle);
-  }, [query, open]);
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return notes
+      .filter((n) => !n.archived && (n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q)))
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 30);
+  }, [notes, query]);
 
   useEffect(() => {
     if (!open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery("");
-      setResults([]);
     }
   }, [open]);
 

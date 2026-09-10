@@ -10,15 +10,13 @@ import { SearchPalette } from "@/components/overlay/SearchPalette";
 import { useWorkspaceStore } from "@/lib/store";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { createNoteAction } from "@/server/actions/notes";
-import type { SidebarNote } from "@/lib/grouping";
+import { useNotesMutations } from "@/lib/notes-query";
 
 export function AppShell({
   email,
-  notes,
   children,
 }: {
   email: string;
-  notes: SidebarNote[];
   children: ReactNode;
 }) {
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);
@@ -31,6 +29,7 @@ export function AppShell({
   const isDesktop = useIsDesktop();
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const { addNote } = useNotesMutations();
 
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -52,8 +51,9 @@ export function AppShell({
       if (event.ctrlKey && event.key.toLowerCase() === "n") {
         event.preventDefault();
         startTransition(async () => {
-          const { id } = await createNoteAction({});
-          router.push(`/notes/${id}`);
+          const note = await createNoteAction({});
+          addNote(note);
+          router.push(`/notes/${note.id}`);
         });
         return;
       }
@@ -75,6 +75,7 @@ export function AppShell({
     setSearchOpen,
     router,
     startTransition,
+    addNote,
   ]);
 
   return (
@@ -87,7 +88,7 @@ export function AppShell({
         {children}
       </div>
       <StatusBar filename={activeFilename} />
-      <QuickSwitcher notes={notes} />
+      <QuickSwitcher />
       <SearchPalette />
     </>
   );

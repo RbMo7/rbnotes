@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { defaultSettings, type Settings } from "@/lib/schemas";
 
 export type VimMode = "NORMAL" | "INSERT" | "VISUAL" | "EDIT" | "RO";
 export type SaveState = "clean" | "dirty" | "saving" | "error";
@@ -44,6 +45,14 @@ type WorkspaceState = {
   // (which lives above the per-route page tree) can show it.
   activeFilename: string | null;
   setActiveFilename: (name: string | null) => void;
+
+  // Editor display settings. Seeded once from the server at the top of the
+  // (app) layout (SettingsHydrator) so both the Settings page and every
+  // open note read and write the exact same values -- changing a setting
+  // in one place is reflected everywhere without a reload.
+  settings: Settings;
+  setSettings: (settings: Settings) => void;
+  updateSettings: (patch: Partial<Settings>) => void;
 };
 
 /**
@@ -85,4 +94,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
 
   activeFilename: null,
   setActiveFilename: (activeFilename) => set({ activeFilename }),
+
+  settings: defaultSettings,
+  setSettings: (settings) => set({ settings }),
+  updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
 }));

@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
-import type { Note } from "@prisma/client";
 import { deriveTitleFromContent } from "@/lib/markdown-title";
+import type { FullNote } from "@/lib/note-types";
 
 /**
  * All note access lives here, and every function takes an already-verified
@@ -10,46 +10,49 @@ import { deriveTitleFromContent } from "@/lib/markdown-title";
  * no other module is allowed to query the Note table directly.
  */
 
-export async function listNotesForSidebar(userId: string) {
-  return db.note.findMany({
+/**
+ * The one query the whole app is built on: every one of the user's notes,
+ * full content included. Fetched once (prefetched server-side in
+ * (app)/layout.tsx, hydrated into the client's TanStack Query cache) and
+ * never fetched again per-click -- the sidebar, the editor, tags, graph,
+ * and search all read this same array from lib/notes-query.ts. Dates come
+ * back as ISO strings, not Date objects: notes added later via a server
+ * action (e.g. after :new) go through the same shape, so nothing in the
+ * cache ever silently differs by how it got there.
+ */
+export async function listAllNotesFull(userId: string): Promise<FullNote[]> {
+  const notes = await db.note.findMany({
     where: { userId, deletedAt: null },
     orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
-    select: {
-      id: true,
-      title: true,
-      updatedAt: true,
-      pinned: true,
-      archived: true,
-    },
   });
+  return notes.map(toFullNote);
 }
 
-export async function getNote(userId: string, noteId: string): Promise<Note | null> {
-  return db.note.findFirst({
-    where: { id: noteId, userId, deletedAt: null },
-  });
+function toFullNote(note: {
+  id: string;
+  title: string;
+  content: string;
+  pinned: boolean;
+  archived: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}): FullNote {
+  return {
+    id: note.id,
+    title: note.title,
+    content: note.content,
+    pinned: note.pinned,
+    archived: note.archived,
+    createdAt: note.createdAt.toISOString(),
+    updatedAt: note.updatedAt.toISOString(),
+  };
 }
 
-/** Stable ordinal for the "buffer #N" chip -- position among the user's notes by creation order. */
-export async function getBufferNumber(userId: string, note: Pick<Note, "createdAt">) {
-  return db.note.count({
-    where: { userId, deletedAt: null, createdAt: { lte: note.createdAt } },
-  });
-}
-
-export async function getMostRecentNoteId(userId: string) {
-  const note = await db.note.findFirst({
-    where: { userId, deletedAt: null, archived: false },
-    orderBy: { updatedAt: "desc" },
-    select: { id: true },
-  });
-  return note?.id ?? null;
-}
-
-export async function createNote(userId: string, title?: string) {
-  return db.note.create({
+export async function createNote(userId: string, title?: string): Promise<FullNote> {
+  const note = await db.note.create({
     data: { userId, title: title?.trim() || "untitled", content: "" },
   });
+  return toFullNote(note);
 }
 
 /**
@@ -91,22 +94,4 @@ export async function softDeleteNote(userId: string, noteId: string) {
     data: { deletedAt: new Date() },
   });
   if (result.count === 0) throw new Error("Note not found");
-}
-
-export async function searchNotes(userId: string, query: string) {
-  const q = query.trim();
-  if (!q) return [];
-  return db.note.findMany({
-    where: {
-      userId,
-      deletedAt: null,
-      OR: [
-        { title: { contains: q, mode: "insensitive" } },
-        { content: { contains: q, mode: "insensitive" } },
-      ],
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 30,
-    select: { id: true, title: true, content: true, updatedAt: true },
-  });
 }

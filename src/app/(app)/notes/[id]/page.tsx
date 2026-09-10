@@ -1,39 +1,21 @@
-import { notFound } from "next/navigation";
-import { getAuthedUser } from "@/lib/auth";
-import { getNote, getBufferNumber } from "@/lib/notes";
-import { settingsSchema, defaultSettings } from "@/lib/schemas";
 import { BufferWorkspace } from "@/components/buffer/BufferWorkspace";
 
+/**
+ * Deliberately does no data fetching of its own. Auth is already enforced
+ * by (app)/layout.tsx (which runs before any nested page), and note
+ * content lives entirely in the client-side notes-query cache that same
+ * layout prefetched -- BufferWorkspace reads this note straight out of
+ * that cache. A note id that doesn't exist, or belongs to someone else,
+ * simply isn't in the cache (it was scoped to this user at the one fetch
+ * that populated it) -- BufferWorkspace shows a "not found" state for
+ * both cases identically, which is the same guarantee the old per-request
+ * DB lookup made, just enforced by construction instead of a query.
+ */
 export default async function NotePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const user = await getAuthedUser();
-
-  // getNote scopes strictly to `userId` -- a note that exists but belongs to
-  // someone else resolves to null here, same as a note that doesn't exist
-  // at all. That's deliberate: it must never distinguish "not yours" from
-  // "not found".
-  const note = await getNote(user.id, id);
-  if (!note) notFound();
-
-  const bufferNumber = await getBufferNumber(user.id, note);
-  const parsedSettings = settingsSchema.safeParse(user.settings);
-  const settings = parsedSettings.success ? parsedSettings.data : defaultSettings;
-
-  return (
-    <BufferWorkspace
-      key={note.id}
-      note={{
-        id: note.id,
-        title: note.title,
-        content: note.content,
-        createdAt: note.createdAt,
-      }}
-      bufferNumber={bufferNumber}
-      initialSettings={settings}
-    />
-  );
+  return <BufferWorkspace key={id} noteId={id} />;
 }

@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { displayFilename } from "@/lib/format";
-import type { GraphEdge, GraphNode } from "@/lib/graph";
+import { useNotesQuery } from "@/lib/notes-query";
+import { buildNoteGraph } from "@/lib/graph";
 
 const WIDTH = 900;
 const HEIGHT = 600;
@@ -12,9 +13,13 @@ const HEIGHT = 600;
  * Real view built from `[[wiki-links]]` and shared tags, rendered strictly
  * in the design's own visual language (1px outline-variant edges, zero
  * radius, no shadow) -- there is no GRAPH screen in Stitch to copy, so this
- * is derived rather than invented from scratch.
+ * is derived rather than invented from scratch. Computed (useMemo, pure
+ * JS) over the already-loaded notes-query cache -- opening this page
+ * never fetches anything.
  */
-export function GraphView({ nodes, edges }: { nodes: GraphNode[]; edges: GraphEdge[] }) {
+export function GraphView() {
+  const { data: allNotes = [] } = useNotesQuery();
+  const { nodes, edges } = useMemo(() => buildNoteGraph(allNotes), [allNotes]);
   const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
 

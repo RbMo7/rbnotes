@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { FileText, Archive } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
 import { displayFilename } from "@/lib/format";
-import { formatSidebarTimestamp, type SidebarNote } from "@/lib/grouping";
+import { formatSidebarTimestamp } from "@/lib/grouping";
+import { useNotesQuery } from "@/lib/notes-query";
 
 /**
  * Ctrl+P. Per the design system spec: centered at 20% viewport height,
@@ -14,9 +15,10 @@ import { formatSidebarTimestamp, type SidebarNote } from "@/lib/grouping";
  * no shadow -- unlike every other overlay in this app, this one is
  * explicitly specified with zero elevation.
  */
-export function QuickSwitcher({ notes }: { notes: SidebarNote[] }) {
+export function QuickSwitcher() {
   const open = useWorkspaceStore((s) => s.quickSwitcherOpen);
   const setOpen = useWorkspaceStore((s) => s.setQuickSwitcherOpen);
+  const { data: notes = [] } = useNotesQuery();
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -24,7 +26,7 @@ export function QuickSwitcher({ notes }: { notes: SidebarNote[] }) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = q ? notes.filter((n) => n.title.toLowerCase().includes(q)) : notes;
-    return list.slice(0, 20);
+    return list.slice(0, 20).map((n) => ({ ...n, updatedAt: new Date(n.updatedAt) }));
   }, [notes, query]);
 
   const openNote = (id: string) => {

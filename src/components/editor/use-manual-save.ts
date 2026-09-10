@@ -16,10 +16,12 @@ import { saveNoteContentAction } from "@/server/actions/notes";
  * double `:w` (or `:wq` firing write+quit back to back) must not let an
  * in-flight response mark a newer edit "clean" out of order.
  */
+export type SavedInfo = { title: string; content: string; updatedAt: string };
+
 export function useManualSave(
   noteId: string,
   getContent: () => string,
-  onSaved?: (title: string) => void,
+  onSaved?: (info: SavedInfo) => void,
 ) {
   const setSaveState = useWorkspaceStore((s) => s.setSaveState);
   const revisionRef = useRef(0);
@@ -47,8 +49,9 @@ export function useManualSave(
       setSaveState(revisionRef.current === savedRevisionRef.current ? "clean" : "dirty");
       // The server is the single source of truth for the title (derived
       // from the note's own first heading) -- reflect exactly what it
-      // persisted rather than re-deriving it again client-side.
-      onSavedRef.current?.(result.title);
+      // persisted (and the content that produced it) into the shared
+      // notes cache, rather than re-deriving it again client-side.
+      onSavedRef.current?.({ title: result.title, content, updatedAt: result.updatedAt });
       return true;
     } catch {
       savingRef.current = false;

@@ -1,5 +1,4 @@
-import "server-only";
-import { db } from "@/lib/db";
+import type { FullNote } from "@/lib/note-types";
 
 // Matches a leading `#word` the way the Stitch INSERT screen highlights
 // frontmatter tags (`#distributed-systems`, `#queue-arch`, `#benchmarks`):
@@ -17,14 +16,16 @@ export function extractTags(content: string): string[] {
 
 export type TagSummary = { tag: string; count: number; noteIds: string[] };
 
-export async function listTagsForUser(userId: string): Promise<TagSummary[]> {
-  const notes = await db.note.findMany({
-    where: { userId, deletedAt: null, archived: false },
-    select: { id: true, content: true },
-  });
-
+/**
+ * Pure and isomorphic -- no DB query. The TAGS page runs this over the
+ * already-loaded notes-query cache (lib/notes-query.ts) client-side, so
+ * opening it never fetches anything; it's the same data the sidebar and
+ * editor already have in memory.
+ */
+export function computeTagSummaries(notes: Pick<FullNote, "id" | "content" | "archived">[]): TagSummary[] {
   const byTag = new Map<string, TagSummary>();
   for (const note of notes) {
+    if (note.archived) continue;
     for (const tag of extractTags(note.content)) {
       const entry = byTag.get(tag) ?? { tag, count: 0, noteIds: [] };
       entry.count += 1;
@@ -32,16 +33,13 @@ export async function listTagsForUser(userId: string): Promise<TagSummary[]> {
       byTag.set(tag, entry);
     }
   }
-
   return [...byTag.values()].sort((a, b) => b.count - a.count);
 }
 
-export async function listNotesByTag(userId: string, tag: string) {
-  const notes = await db.note.findMany({
-    where: { userId, deletedAt: null, archived: false },
-    select: { id: true, title: true, content: true, updatedAt: true },
-    orderBy: { updatedAt: "desc" },
-  });
+export function filterNotesByTag<T extends Pick<FullNote, "content" | "archived">>(
+  notes: T[],
+  tag: string,
+): T[] {
   const normalized = tag.toLowerCase();
-  return notes.filter((n) => extractTags(n.content).includes(normalized));
+  return notes.filter((n) => !n.archived && extractTags(n.content).includes(normalized));
 }
