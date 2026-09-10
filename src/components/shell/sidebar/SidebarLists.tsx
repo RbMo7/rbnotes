@@ -17,7 +17,7 @@ import { SidebarTagList } from "@/components/shell/sidebar/SidebarTagList";
 export function SidebarLists() {
   const { data: notes = [] } = useNotesQuery();
   const [tab, setTab] = useState<SidebarTab>("buffers");
-  const [tag, setTag] = useState<string | null>(null);
+  const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
   const filterInputRef = useRef<HTMLInputElement>(null);
   const focusTagsRequestId = useWorkspaceStore((s) => s.focusTagsRequestId);
@@ -32,7 +32,7 @@ export function SidebarLists() {
   useEffect(() => {
     if (focusTagsRequestId === 0) return;
     setTab("tags");
-    setTag(null);
+    setExpandedTags(new Set());
     setFilter("");
     filterInputRef.current?.focus();
   }, [focusTagsRequestId]);
@@ -40,26 +40,26 @@ export function SidebarLists() {
 
   function selectTab(next: SidebarTab) {
     setTab(next);
-    setTag(null);
+    setExpandedTags(new Set());
     setFilter("");
   }
 
-  function selectTag(nextTag: string) {
-    setTag(nextTag);
-    setFilter("");
-  }
-
-  function backToTags() {
-    setTag(null);
-    setFilter("");
+  function toggleTag(tag: string) {
+    setExpandedTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) {
+        next.delete(tag);
+      } else {
+        next.add(tag);
+      }
+      return next;
+    });
   }
 
   const placeholder =
-    tab === "tags" && tag
-      ? "type to filter files, / to search everywhere"
-      : tab === "tags"
-        ? "type to filter tags, / to search everywhere"
-        : "type to filter buffers, / to search everywhere";
+    tab === "tags"
+      ? "type to filter tags, / to search everywhere"
+      : "type to filter buffers, / to search everywhere";
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -79,10 +79,9 @@ export function SidebarLists() {
           ) : (
             <SidebarTagList
               notes={notes}
-              tag={tag}
               filter={filter}
-              onSelectTag={selectTag}
-              onBack={backToTags}
+              expandedTags={expandedTags}
+              onToggleTag={toggleTag}
             />
           )}
         </div>

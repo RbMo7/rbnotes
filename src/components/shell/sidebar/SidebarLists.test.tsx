@@ -67,22 +67,32 @@ describe("SidebarLists", () => {
     expect(screen.getByText("home")).toBeTruthy();
   });
 
-  it("drills into a tag to show its files, and the breadcrumb steps back one level", () => {
+  it("expands a tag inline as an accordion, alongside the other tags, and collapses on a second click", () => {
     render(<SidebarLists />);
     fireEvent.click(screen.getByRole("tab", { name: "Tags" }));
     fireEvent.click(screen.getByText("project"));
 
-    expect(screen.getByText("#project")).toBeTruthy();
     expect(screen.getByText("shipping-plan.md")).toBeTruthy();
     expect(screen.getByText("q3-roadmap.md")).toBeTruthy();
     expect(screen.queryByText("grocery-list.md")).toBeNull();
+    // Other tags stay visible -- this is an accordion, not a drill-down.
+    expect(screen.getByText("home")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Tags" }));
-    expect(screen.getByText("project")).toBeTruthy();
-    expect(screen.queryByText("#project")).toBeNull();
+    fireEvent.click(screen.getByText("project"));
+    expect(screen.queryByText("shipping-plan.md")).toBeNull();
   });
 
-  it("the Buffers tab returns to the top-level list from any drill depth", () => {
+  it("multiple tags can be expanded at once", () => {
+    render(<SidebarLists />);
+    fireEvent.click(screen.getByRole("tab", { name: "Tags" }));
+    fireEvent.click(screen.getByText("project"));
+    fireEvent.click(screen.getByText("home"));
+
+    expect(screen.getByText("shipping-plan.md")).toBeTruthy();
+    expect(screen.getByText("grocery-list.md")).toBeTruthy();
+  });
+
+  it("the Buffers tab returns to the top-level list regardless of expanded tags", () => {
     render(<SidebarLists />);
     fireEvent.click(screen.getByRole("tab", { name: "Tags" }));
     fireEvent.click(screen.getByText("project"));
@@ -141,8 +151,8 @@ describe("SidebarLists", () => {
     });
 
     await waitFor(() => {
-      // Back out of the tag drill-down, not just "still on Tags".
-      expect(screen.queryByText("#project")).toBeNull();
+      // Collapses any expanded tag accordions, not just "still on Tags".
+      expect(screen.queryByText("shipping-plan.md")).toBeNull();
       expect(screen.getByLabelText("Filter or search")).toBe(document.activeElement);
     });
   });
