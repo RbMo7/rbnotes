@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { getAllNotesAction } from "@/server/actions/notes";
-import type { FullNote } from "@/lib/note-types";
+import { notesQueryKey, type FullNote } from "@/lib/note-types";
 
 export type { FullNote };
 
@@ -22,7 +22,6 @@ export type { FullNote };
  * client, wrong after a server-rendered reload" bugs. Callers that need a
  * real Date (grouping, timestamp formatting) convert at the point of use.
  */
-export const notesQueryKey = ["notes"] as const;
 
 export function useNotesQuery() {
   return useQuery({

@@ -2,7 +2,12 @@ import { QueryClient, dehydrate, HydrationBoundary } from "@tanstack/react-query
 import { getAuthedUser } from "@/lib/auth";
 import { listAllNotesFull } from "@/lib/notes";
 import { settingsSchema, defaultSettings } from "@/lib/schemas";
-import { notesQueryKey } from "@/lib/notes-query";
+// Imported from note-types, not notes-query -- notes-query.ts is a "use
+// client" module, and a Server Component importing a plain constant from
+// one gets an opaque client reference instead of the real array (see
+// note-types.ts for the full explanation). note-types.ts has no directive,
+// so this is the actual value.
+import { notesQueryKey } from "@/lib/note-types";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { SettingsHydrator } from "@/components/shell/SettingsHydrator";
 import { Sidebar } from "@/components/shell/Sidebar";
