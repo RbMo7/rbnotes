@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { createClient } from "@/lib/supabase/server";
@@ -57,8 +58,12 @@ async function syncProfile(id: string, email: string) {
  * server action and data-access function in lib/notes.ts and lib/shares.ts
  * calls this — never a client-supplied userId — before touching the
  * database.
+ *
+ * Wrapped in React's `cache()` so the layout and page for a given request
+ * (both of which call this independently) share one Supabase round-trip
+ * and one syncProfile instead of paying for it twice per navigation.
  */
-export async function getAuthedUser() {
+export const getAuthedUser = cache(async function getAuthedUser() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -69,10 +74,10 @@ export async function getAuthedUser() {
   }
 
   return syncProfile(user.id, user.email);
-}
+});
 
 /** Like getAuthedUser, but returns null instead of redirecting. */
-export async function getOptionalUser() {
+export const getOptionalUser = cache(async function getOptionalUser() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -81,4 +86,4 @@ export async function getOptionalUser() {
   if (!user || !user.email) return null;
 
   return syncProfile(user.id, user.email);
-}
+});
