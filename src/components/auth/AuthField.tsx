@@ -3,31 +3,23 @@ import type { InputHTMLAttributes } from "react";
 export function AuthField({
   id,
   label,
-  shortcut,
   prefix,
   error,
   ...inputProps
 }: {
   id: string;
   label: string;
-  shortcut: string;
   prefix: string;
   error?: string;
 } & InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div className="flex flex-col gap-space-1">
-      <div className="flex justify-between items-center font-label-sm text-label-sm">
-        <label className="text-on-surface flex items-center gap-space-1" htmlFor={id}>
-          <span className={error ? "text-error" : "text-primary"}>&gt;</span> {label}
-        </label>
-        <span
-          className={`bg-surface-container px-space-1 border ${
-            error ? "border-error text-error" : "border-outline-variant text-on-surface-variant"
-          }`}
-        >
-          {shortcut}
-        </span>
-      </div>
+      <label
+        className="font-label-sm text-label-sm text-on-surface flex items-center gap-space-1"
+        htmlFor={id}
+      >
+        <span className={error ? "text-error" : "text-primary"}>&gt;</span> {label}
+      </label>
       <div
         className={`relative flex items-center bg-surface-container border focus-within:border-primary ${
           error ? "border-error" : "border-outline-variant"

@@ -3,12 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  TerminalWindow,
-  TerminalHeader,
-  TerminalFooter,
-  OrDivider,
-} from "@/components/auth/TerminalWindow";
+import { TerminalWindow, TerminalHeader, OrDivider } from "@/components/auth/TerminalWindow";
 import { AuthField } from "@/components/auth/AuthField";
 import { ExecuteButton } from "@/components/auth/AuthButtons";
 import { GithubOAuthButton } from "@/components/auth/GithubOAuthButton";
@@ -68,25 +63,12 @@ export function LoginForm({ next }: { next: string }) {
   return (
     <main className="w-full max-w-md">
       <div className="flex flex-col w-full">
-        <TerminalWindow
-          titleBarLabel="AUTH.BUFFER.V1"
-          footer={
-            <TerminalFooter
-              hints={[
-                ["[Tab]", "Next"],
-                ["[Enter]", "Submit"],
-                ["[Esc]", "Clear"],
-                ["[Ctrl+G]", "GitHub"],
-              ]}
-            />
-          }
-        >
-          <TerminalHeader tag="STABLE" tagline="Write. Think. Save." />
+        <TerminalWindow titleBarLabel="AUTH.BUFFER">
+          <TerminalHeader tagline="Write. Think. Save." />
           <form ref={formRef} className="flex flex-col gap-space-4" onSubmit={handleSubmit}>
             <AuthField
               id="email"
               label="identity (email)"
-              shortcut="[Tab]"
               prefix="@"
               type="email"
               autoComplete="email"
@@ -99,7 +81,6 @@ export function LoginForm({ next }: { next: string }) {
             <AuthField
               id="password"
               label="secret (passkey)"
-              shortcut="[Enter]"
               prefix="*"
               type="password"
               autoComplete="current-password"

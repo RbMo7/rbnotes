@@ -3,11 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  TerminalWindow,
-  TerminalHeader,
-  TerminalFooter,
-} from "@/components/auth/TerminalWindow";
+import { TerminalWindow, TerminalHeader } from "@/components/auth/TerminalWindow";
 import { AuthField } from "@/components/auth/AuthField";
 import { ExecuteButton } from "@/components/auth/AuthButtons";
 import { StatusToast } from "@/components/auth/StatusToast";
@@ -74,19 +70,8 @@ export function RegisterForm() {
   return (
     <main className="w-full max-w-md">
       <div className="flex flex-col w-full">
-        <TerminalWindow
-          titleBarLabel="NEW.USER.V1"
-          footer={
-            <TerminalFooter
-              hints={[
-                ["[Tab]", "Next"],
-                ["[Enter]", "Submit"],
-                ["[Esc]", "Clear"],
-              ]}
-            />
-          }
-        >
-          <TerminalHeader tag="STABLE" tagline="Write. Think. Save." />
+        <TerminalWindow titleBarLabel="NEW.USER">
+          <TerminalHeader tagline="Write. Think. Save." />
           {confirmationSent ? (
             <div className="flex flex-col gap-space-3">
               <p className="font-body-md text-body-md text-on-surface-variant">
@@ -106,7 +91,6 @@ export function RegisterForm() {
             <AuthField
               id="email"
               label="identity (email)"
-              shortcut="[Tab]"
               prefix="@"
               type="email"
               autoComplete="email"
@@ -118,7 +102,6 @@ export function RegisterForm() {
             <AuthField
               id="password"
               label="secret (passkey)"
-              shortcut="[Tab]"
               prefix="*"
               type="password"
               autoComplete="new-password"
@@ -131,7 +114,6 @@ export function RegisterForm() {
             <AuthField
               id="confirmPassword"
               label="confirm (passkey)"
-              shortcut="[Enter]"
               prefix="*"
               type="password"
               autoComplete="new-password"

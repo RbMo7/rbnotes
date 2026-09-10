@@ -2,11 +2,7 @@
 
 import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  TerminalWindow,
-  TerminalHeader,
-  TerminalFooter,
-} from "@/components/auth/TerminalWindow";
+import { TerminalWindow, TerminalHeader } from "@/components/auth/TerminalWindow";
 import { AuthField } from "@/components/auth/AuthField";
 import { ExecuteButton } from "@/components/auth/AuthButtons";
 import { StatusToast } from "@/components/auth/StatusToast";
@@ -49,23 +45,12 @@ export function ResetPasswordForm() {
   return (
     <main className="w-full max-w-md">
       <div className="flex flex-col w-full">
-        <TerminalWindow
-          titleBarLabel="RESET.BUFFER.V1"
-          footer={
-            <TerminalFooter
-              hints={[
-                ["[Tab]", "Next"],
-                ["[Enter]", "Submit"],
-              ]}
-            />
-          }
-        >
-          <TerminalHeader tag="STABLE" tagline="Write. Think. Save." />
+        <TerminalWindow titleBarLabel="RESET.BUFFER">
+          <TerminalHeader tagline="Write. Think. Save." />
           <form className="flex flex-col gap-space-4" onSubmit={handleSubmit}>
             <AuthField
               id="password"
               label="new secret (passkey)"
-              shortcut="[Tab]"
               prefix="*"
               type="password"
               autoComplete="new-password"
@@ -78,7 +63,6 @@ export function ResetPasswordForm() {
             <AuthField
               id="confirmPassword"
               label="confirm (passkey)"
-              shortcut="[Enter]"
               prefix="*"
               type="password"
               autoComplete="new-password"

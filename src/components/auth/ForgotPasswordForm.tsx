@@ -2,11 +2,7 @@
 
 import { useCallback, useState, useTransition } from "react";
 import Link from "next/link";
-import {
-  TerminalWindow,
-  TerminalHeader,
-  TerminalFooter,
-} from "@/components/auth/TerminalWindow";
+import { TerminalWindow, TerminalHeader } from "@/components/auth/TerminalWindow";
 import { AuthField } from "@/components/auth/AuthField";
 import { ExecuteButton } from "@/components/auth/AuthButtons";
 import { StatusToast } from "@/components/auth/StatusToast";
@@ -47,18 +43,8 @@ export function ForgotPasswordForm() {
   return (
     <main className="w-full max-w-md">
       <div className="flex flex-col w-full">
-        <TerminalWindow
-          titleBarLabel="RESET.BUFFER.V1"
-          footer={
-            <TerminalFooter
-              hints={[
-                ["[Enter]", "Submit"],
-                ["[Esc]", "Clear"],
-              ]}
-            />
-          }
-        >
-          <TerminalHeader tag="STABLE" tagline="Write. Think. Save." />
+        <TerminalWindow titleBarLabel="RESET.BUFFER">
+          <TerminalHeader tagline="Write. Think. Save." />
           {sent ? (
             <p className="font-body-md text-body-md text-on-surface-variant">
               <span className="text-primary">&gt;&gt;</span> Reset link dispatched to{" "}
@@ -69,7 +55,6 @@ export function ForgotPasswordForm() {
               <AuthField
                 id="email"
                 label="identity (email)"
-                shortcut="[Enter]"
                 prefix="@"
                 type="email"
                 autoComplete="email"
