@@ -15,6 +15,7 @@ import { searchKeymap } from "@codemirror/search";
 import { vim, getCM, Vim } from "@replit/codemirror-vim";
 import { rbnotesTheme, rbnotesMarkdownHighlight } from "@/components/editor/rbnotes-theme";
 import { rbnotesMarkdown, lineNumberGutter } from "@/components/editor/extensions";
+import { livePreview, setPreviewMode } from "@/components/editor/live-preview";
 import { matchGlobalShortcut, type Intent } from "@/components/editor/shortcuts";
 import { isH1Line } from "@/lib/markdown-title";
 import { useWorkspaceStore, type VimMode } from "@/lib/store";
@@ -104,6 +105,13 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
   const wrapCompartment = useRef(new Compartment()).current;
   const tabSizeCompartment = useRef(new Compartment()).current;
 
+  // The live-preview StateField reads this on every rebuild rather than a
+  // Compartment: a compartment reconfigure never survives view.setState()
+  // to another note's cached EditorState, since that state still carries
+  // whatever value the compartment held when *it* was created. See
+  // live-preview.ts's module doc.
+  const previewModeRef = useRef<VimMode>("NORMAL");
+
   // Per-note document cache (undo/selection live inside each EditorState)
   // and per-note scroll position (CodeMirror doesn't persist scroll in
   // state, so it's tracked alongside, restored on activation).
@@ -152,25 +160,49 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       if (!vimEnabled || readOnly) return;
       const cm = getCM(view);
       if (!cm) return;
-      setMode(mapVimMode(cm.state.vim?.mode));
+      const initial = mapVimMode(cm.state.vim?.mode);
+      previewModeRef.current = initial;
+      setMode(initial);
       cm.on("vim-mode-change", (e: { mode?: string }) => {
         const next = mapVimMode(e.mode);
+        previewModeRef.current = next;
         setMode(next);
         // vim-mode-change fires synchronously from inside the vim plugin's
         // own update handling -- CodeMirror throws ("Calls to
         // EditorView.update are not allowed while an update is in
         // progress") on a reentrant dispatch() here, which destroys the
         // vim plugin outright. Deferring one microtask lets the in-flight
-        // update finish first.
+        // update finish first. The live-preview field rides the same
+        // dispatch so a mode change and its rendering effect land in one
+        // transaction, never two.
         queueMicrotask(() => {
           if (viewRef.current === view) {
-            view.dispatch({ effects: themeCompartment.reconfigure(rbnotesTheme(next)) });
+            view.dispatch({
+              effects: [
+                themeCompartment.reconfigure(rbnotesTheme(next)),
+                setPreviewMode.of(next),
+              ],
+            });
           }
         });
       });
     },
     [vimEnabled, readOnly, setMode, themeCompartment],
   );
+
+  /**
+   * A cached EditorState's live-preview field only ever changes through a
+   * dispatched transaction -- it does not get reinitialized just because
+   * `view.setState()` mounts it. A note left in INSERT still carries
+   * INSERT's "raw" field value when revisited later even if the live vim
+   * mode is by then NORMAL again (switching buffers always resets vim to
+   * Normal). Called after every setState so the field never drifts from
+   * the mode `previewModeRef` says is actually current, including on the
+   * read-only path where wireVimMode itself is a no-op.
+   */
+  const syncPreviewMode = useCallback((view: EditorView) => {
+    view.dispatch({ effects: setPreviewMode.of(previewModeRef.current) });
+  }, []);
 
   const replaceFirstH1 = useCallback((title: string) => {
     const view = viewRef.current;
@@ -241,6 +273,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     generationRef.current = generation;
 
     const initialMode: VimMode = readOnly ? "RO" : vimEnabled ? "NORMAL" : "EDIT";
+    previewModeRef.current = initialMode;
 
     const updateListener = EditorView.updateListener.of((update) => {
       if (update.docChanged && activeIdRef.current) onChangeRef.current?.(activeIdRef.current);
@@ -260,6 +293,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       drawSelection(),
       rbnotesMarkdown,
       rbnotesMarkdownHighlight,
+      livePreview(previewModeRef),
       gutterCompartment.of(lineNumberGutter(readOnly ? "absolute" : settings.lineNumbers)),
       wrapCompartment.of(settings.wordWrap ? EditorView.lineWrapping : []),
       tabSizeCompartment.of(EditorState.tabSize.of(settings.tabSize)),
@@ -292,6 +326,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     setReady(true);
 
     wireVimMode(view);
+    syncPreviewMode(view);
 
     // Capture-phase so this always wins over @replit/codemirror-vim's own
     // key handling on view.dom's descendants (contentDOM). One table decides
@@ -389,6 +424,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       // has nothing to attribute a stray edit to even if focus lingers).
       view.setState(EditorState.create({ doc: "", extensions: sharedExtensionsRef.current ?? [] }));
       wireVimMode(view);
+      syncPreviewMode(view);
       activeIdRef.current = null;
       view.contentDOM.blur();
       return;
@@ -407,6 +443,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     }
     view.setState(state);
     wireVimMode(view);
+    syncPreviewMode(view);
     activeIdRef.current = noteId;
     view.scrollDOM.scrollTop = scrollRef.current.get(noteId) ?? 0;
 
@@ -417,7 +454,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     // without them here too, this effect would keep comparing against its
     // *last* noteId/content and, finding neither changed, never re-run to
     // populate the new view at all.
-  }, [noteId, content, ready, vimEnabled, readOnly, wireVimMode]);
+  }, [noteId, content, ready, vimEnabled, readOnly, wireVimMode, syncPreviewMode]);
 
   // Arrived at the active buffer from a global-search result click: select
   // the first occurrence of the query. Independent of the switch effect
