@@ -71,12 +71,6 @@ export function SharedNoteView({
             settings={defaultSettings}
             vimEnabled={false}
             readOnly
-            onOpenCommandDock={() => {}}
-            onNewNote={() => {}}
-            onOpenQuickSwitcher={() => {}}
-            onOpenSearch={() => {}}
-            onToggleSidebar={() => {}}
-            onForceSave={() => {}}
           />
         </div>
         <p className="mt-space-2 font-label-sm text-label-sm text-outline">

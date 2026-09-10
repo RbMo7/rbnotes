@@ -32,10 +32,24 @@ export function useManualSave(
     onSavedRef.current = onSaved;
   }, [onSaved]);
 
+  // This hook is the sole writer of the global save-state field: one buffer
+  // mounts at a time (the note route remounts on a key change), and a fresh
+  // mount is always clean because its revision counters start equal. Without
+  // this, the previous buffer's "dirty" leaked into the newly opened one and
+  // even `:w` couldn't clear it (the no-change early return skipped state).
+  useEffect(() => {
+    setSaveState("clean");
+  }, [setSaveState]);
+
   /** Returns whether the write succeeded -- `:wq` only quits on success. */
   const write = useCallback(async (): Promise<boolean> => {
     if (savingRef.current) return true;
-    if (revisionRef.current === savedRevisionRef.current) return true;
+    if (revisionRef.current === savedRevisionRef.current) {
+      // Nothing to persist -- but the indicator must still tell the truth
+      // (a no-op `:w` on a clean buffer reports clean, never a stale flag).
+      setSaveState("clean");
+      return true;
+    }
 
     savingRef.current = true;
     setSaveState("saving");

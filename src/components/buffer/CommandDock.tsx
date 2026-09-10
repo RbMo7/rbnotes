@@ -1,7 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { COMMAND_CHIPS } from "@/components/editor/command-dispatch";
+
+type CommandChip = { label: string; full: string; danger?: boolean };
+
+const COMMAND_CHIPS: CommandChip[] = [
+  { label: ":w", full: "w" },
+  { label: ":rename <title>", full: "rename " },
+  { label: ":new", full: "new" },
+  { label: ":wq", full: "wq" },
+  { label: ":delete", full: "delete", danger: true },
+  { label: ":share", full: "share" },
+  { label: ":set rnu", full: "set rnu" },
+  { label: ":help", full: "help" },
+];
 
 /**
  * The Stitch command-mode screen's bottom dock: a TAB-COMPLETE BUFFER chip

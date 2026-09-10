@@ -1,23 +1,45 @@
-import { Vim, getCM } from "@replit/codemirror-vim";
-import type { EditorView } from "@codemirror/view";
 import type { Settings } from "@/lib/schemas";
-import { isH1Line } from "@/lib/markdown-title";
 
-export type CommandContext = {
+/**
+ * The operations the command layer expects from the editor, as a small
+ * adapter rather than the live CodeMirror view. The editor is the sole
+ * production implementation (see Editor.tsx); tests supply a fake. This is
+ * the seam that keeps `:rename`'s document surgery out of dispatch and keeps
+ * the whole command layer testable without a DOM.
+ */
+export type EditorOps = {
+  /** Replace the document's first H1 line with `# title`, or prepend one. */
+  replaceFirstH1: (title: string) => void;
+  /** Run a genuine Vim ex command; returns false if it was not handled. */
+  execVimEx: (command: string) => boolean;
+};
+
+/** Note operations the command layer drives. The archive-vs-delete policy lives behind `delete`. */
+export type NoteOps = {
   /** Resolves to whether the write succeeded. */
   save: () => Promise<boolean>;
-  quit: (force: boolean) => void;
   isDirty: () => boolean;
-  createNew: () => void;
+  create: () => void;
   rename: (title: string) => void;
-  deleteNote: (hard: boolean) => void;
+  delete: (hard: boolean) => void;
+};
+
+/** Workspace chrome the command layer drives. */
+export type WorkspaceOps = {
+  notify: (message: string) => void;
   openHelp: () => void;
+  /** Close the topmost overlay, mirroring Vim's `:q` closing a preview window. */
+  quit: () => void;
   toggleSidebar: () => void;
   toggleInspector: () => void;
   share: () => void;
   unshare: () => void;
   updateSettings: (patch: Partial<Settings>) => void;
-  notify: (message: string) => void;
+};
+
+export type CommandContext = {
+  note: NoteOps;
+  workspace: WorkspaceOps;
 };
 
 /**
@@ -28,11 +50,11 @@ export type CommandContext = {
  * table for real Vim behavior (line deletion, vim options), and registering
  * over them would silently break that engine for anyone using genuine Vim
  * ex commands. Anything we don't recognize as an app command falls through
- * to `Vim.handleEx`, so real Vim ex commands (`:s/foo/bar/`, `:sort`,
- * `:g/pattern/d`, vim's own `:set ignorecase`, ...) keep working exactly as
- * they do in real Vim.
+ * to the editor adapter's `execVimEx`, so real Vim ex commands (`:s/foo/bar/`,
+ * `:sort`, `:g/pattern/d`, vim's own `:set ignorecase`, ...) keep working
+ * exactly as they do in real Vim.
  */
-export async function dispatchCommand(raw: string, view: EditorView, ctx: CommandContext) {
+export async function dispatchCommand(raw: string, ops: EditorOps, ctx: CommandContext) {
   const input = raw.trim();
   if (!input) return;
 
@@ -45,87 +67,70 @@ export async function dispatchCommand(raw: string, view: EditorView, ctx: Comman
   switch (bareName) {
     case "w":
     case "write":
-      await ctx.save();
+      await ctx.note.save();
       return;
     case "q":
     case "quit":
       // Mirrors real Vim's E37: refuse to leave a dirty buffer unless
       // forced with `:q!`. There is no autosave net anymore (§13.4), so
       // this is the one thing standing between a stray `:q` and lost work.
-      if (!bang && ctx.isDirty()) {
-        ctx.notify("E37: No write since last change (add ! to override)");
+      if (!bang && ctx.note.isDirty()) {
+        ctx.workspace.notify("E37: No write since last change (add ! to override)");
         return;
       }
-      ctx.quit(bang);
+      ctx.workspace.quit();
       return;
     case "wq":
     case "x": {
       // Real Vim semantics: write, then quit only if the write succeeded.
-      const wrote = await ctx.save();
-      if (wrote) ctx.quit(true);
-      else ctx.notify("E212: Can't open file for writing — buffer not closed");
+      const wrote = await ctx.note.save();
+      if (wrote) ctx.workspace.quit();
+      else ctx.workspace.notify("E212: Can't open file for writing — buffer not closed");
       return;
     }
     case "new":
-      ctx.createNew();
+      ctx.note.create();
       return;
     case "rename": {
       // A note's title IS its first `# heading` (lib/markdown-title.ts) --
-      // there's no separate metadata field to write. Renaming means
-      // editing that heading line in the document itself, then writing it
-      // like any other change, so the two can never drift apart.
+      // there's no separate metadata field to write. Renaming means editing
+      // that heading line in the document itself, then writing it like any
+      // other change, so the two can never drift apart. The document surgery
+      // sits behind the editor adapter so this layer stays view-free.
       if (!arg) {
-        ctx.notify("rename: a title is required — :rename <title>");
+        ctx.workspace.notify("rename: a title is required — :rename <title>");
         return;
       }
-      const doc = view.state.doc;
-      let targetLine = 0;
-      for (let i = 1; i <= doc.lines; i++) {
-        if (isH1Line(doc.line(i).text)) {
-          targetLine = i;
-          break;
-        }
-      }
-      if (targetLine) {
-        const line = doc.line(targetLine);
-        view.dispatch({ changes: { from: line.from, to: line.to, insert: `# ${arg}` } });
-      } else {
-        view.dispatch({ changes: { from: 0, to: 0, insert: `# ${arg}\n\n` } });
-      }
-      ctx.rename(arg);
-      await ctx.save();
+      ops.replaceFirstH1(arg);
+      ctx.note.rename(arg);
+      await ctx.note.save();
       return;
     }
     case "delete":
-      ctx.deleteNote(bang);
+      ctx.note.delete(bang);
       return;
     case "help":
-      ctx.openHelp();
+      ctx.workspace.openHelp();
       return;
     case "insp":
-      ctx.toggleInspector();
+      ctx.workspace.toggleInspector();
       return;
     case "b":
-      ctx.toggleSidebar();
+      ctx.workspace.toggleSidebar();
       return;
     case "share":
-      ctx.share();
+      ctx.workspace.share();
       return;
     case "unshare":
-      ctx.unshare();
+      ctx.workspace.unshare();
       return;
     case "set":
       applyAppSetting(arg, ctx);
       return;
-    default: {
-      const cm = getCM(view);
-      if (!cm) return;
-      try {
-        Vim.handleEx(cm as Parameters<typeof Vim.handleEx>[0], input);
-      } catch {
-        ctx.notify(`E492: not an editor command: ${input}`);
+    default:
+      if (!ops.execVimEx(input)) {
+        ctx.workspace.notify(`E492: not an editor command: ${input}`);
       }
-    }
   }
 }
 
@@ -137,45 +142,32 @@ function applyAppSetting(arg: string, ctx: CommandContext) {
   switch (arg) {
     case "nu":
     case "number":
-      ctx.updateSettings({ lineNumbers: "absolute" });
+      ctx.workspace.updateSettings({ lineNumbers: "absolute" });
       return;
     case "nonu":
     case "nonumber":
-      ctx.updateSettings({ lineNumbers: "off" });
+      ctx.workspace.updateSettings({ lineNumbers: "off" });
       return;
     case "rnu":
     case "relativenumber":
-      ctx.updateSettings({ lineNumbers: "hybrid" });
+      ctx.workspace.updateSettings({ lineNumbers: "hybrid" });
       return;
     case "nornu":
     case "norelativenumber":
-      ctx.updateSettings({ lineNumbers: "absolute" });
+      ctx.workspace.updateSettings({ lineNumbers: "absolute" });
       return;
     case "wrap":
-      ctx.updateSettings({ wordWrap: true });
+      ctx.workspace.updateSettings({ wordWrap: true });
       return;
     case "nowrap":
-      ctx.updateSettings({ wordWrap: false });
+      ctx.workspace.updateSettings({ wordWrap: false });
       return;
     default:
       if (arg.startsWith("ts=") || arg.startsWith("tabsize=")) {
         const n = parseInt(arg.split("=")[1] ?? "", 10);
-        if (n >= 1 && n <= 8) ctx.updateSettings({ tabSize: n });
+        if (n >= 1 && n <= 8) ctx.workspace.updateSettings({ tabSize: n });
         return;
       }
-      ctx.notify(`E518: unknown option: ${arg}`);
+      ctx.workspace.notify(`E518: unknown option: ${arg}`);
   }
 }
-
-export type CommandChip = { label: string; full: string; danger?: boolean };
-
-export const COMMAND_CHIPS: CommandChip[] = [
-  { label: ":w", full: "w" },
-  { label: ":rename <title>", full: "rename " },
-  { label: ":new", full: "new" },
-  { label: ":wq", full: "wq" },
-  { label: ":delete", full: "delete", danger: true },
-  { label: ":share", full: "share" },
-  { label: ":set rnu", full: "set rnu" },
-  { label: ":help", full: "help" },
-];

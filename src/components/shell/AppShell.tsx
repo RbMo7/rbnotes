@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useCallback, useEffect, type ReactNode } from "react";
 import { TopNav } from "@/components/shell/TopNav";
 import { StatusBar } from "@/components/shell/StatusBar";
 import { QuickSwitcher } from "@/components/overlay/QuickSwitcher";
 import { SearchPalette } from "@/components/overlay/SearchPalette";
+import { matchGlobalShortcut, dispatchIntent } from "@/components/editor/shortcuts";
+import { useIntentHandlers } from "@/components/editor/use-intent-handlers";
 import { useWorkspaceStore } from "@/lib/store";
-import { useIsDesktop } from "@/lib/use-is-desktop";
-import { useCreateNote } from "@/lib/notes-query";
 
 export function AppShell({
   email,
@@ -17,55 +17,28 @@ export function AppShell({
   children: ReactNode;
 }) {
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);
-  const toggleSidebar = useWorkspaceStore((s) => s.toggleSidebar);
-  const mobileSidebarOpen = useWorkspaceStore((s) => s.mobileSidebarOpen);
-  const setMobileSidebarOpen = useWorkspaceStore((s) => s.setMobileSidebarOpen);
-  const setQuickSwitcherOpen = useWorkspaceStore((s) => s.setQuickSwitcherOpen);
-  const setSearchOpen = useWorkspaceStore((s) => s.setSearchOpen);
   const activeFilename = useWorkspaceStore((s) => s.activeFilename);
-  const isDesktop = useIsDesktop();
-  const createNote = useCreateNote();
+  const handlers = useIntentHandlers();
+
+  // The shell's adapter over the one shortcut table: when focus is inside
+  // the editor, Editor.tsx's capture-phase listener handles the chord first
+  // and stops it from reaching here. Outside the editor, this is where the
+  // same table gets its turn. `null` mode means "no editor focus", so
+  // mode-gated chords (the ':') never fire here.
+  const handleIntent = useCallback(
+    (event: KeyboardEvent) => {
+      const intent = matchGlobalShortcut(event, null);
+      if (!intent) return;
+      event.preventDefault();
+      dispatchIntent(intent, handlers);
+    },
+    [handlers],
+  );
 
   useEffect(() => {
-    function handleKeydown(event: KeyboardEvent) {
-      if (event.ctrlKey && event.key.toLowerCase() === "b") {
-        event.preventDefault();
-        if (isDesktop) toggleSidebar();
-        else setMobileSidebarOpen(!mobileSidebarOpen);
-        return;
-      }
-      if (event.ctrlKey && event.key.toLowerCase() === "p") {
-        event.preventDefault();
-        setQuickSwitcherOpen(true);
-        return;
-      }
-      if (event.ctrlKey && event.key.toLowerCase() === "n") {
-        event.preventDefault();
-        createNote();
-        return;
-      }
-      // Ctrl+/ opens global (every note) search from anywhere -- when
-      // focus is inside the editor, Editor.tsx's own capture-phase
-      // listener handles this first and stops it from reaching here
-      // (same pattern as Ctrl+N/P/B above). Plain '/' is deliberately not
-      // bound at all: inside the editor it's codemirror-vim's own local
-      // search, and outside it there's nothing for a bare '/' to do.
-      if (event.ctrlKey && event.key === "/") {
-        event.preventDefault();
-        setSearchOpen(true);
-      }
-    }
-    document.addEventListener("keydown", handleKeydown);
-    return () => document.removeEventListener("keydown", handleKeydown);
-  }, [
-    isDesktop,
-    toggleSidebar,
-    mobileSidebarOpen,
-    setMobileSidebarOpen,
-    setQuickSwitcherOpen,
-    setSearchOpen,
-    createNote,
-  ]);
+    document.addEventListener("keydown", handleIntent);
+    return () => document.removeEventListener("keydown", handleIntent);
+  }, [handleIntent]);
 
   return (
     <>

@@ -17,6 +17,12 @@ type WorkspaceState = {
   saveState: SaveState;
   setSaveState: (state: SaveState) => void;
 
+  // The active buffer registers its write here, so the shell's global
+  // Ctrl+S (which lives above the per-route page tree) can reach the one
+  // editor that is actually mounted. Null outside a note buffer.
+  saveActive: (() => void) | null;
+  registerActiveSave: (save: (() => void) | null) => void;
+
   // Desktop (>=1024px): docked collapse, shifts the main content padding.
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
@@ -79,6 +85,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
 
   saveState: "clean",
   setSaveState: (saveState) => set({ saveState }),
+
+  saveActive: null,
+  registerActiveSave: (saveActive) => set({ saveActive }),
 
   sidebarCollapsed: false,
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),

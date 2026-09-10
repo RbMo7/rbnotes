@@ -2,6 +2,7 @@
 
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -11,16 +12,21 @@ import { EditorState, Compartment } from "@codemirror/state";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { searchKeymap } from "@codemirror/search";
-import { vim, getCM } from "@replit/codemirror-vim";
+import { vim, getCM, Vim } from "@replit/codemirror-vim";
 import { rbnotesTheme, rbnotesMarkdownHighlight } from "@/components/editor/rbnotes-theme";
 import { rbnotesMarkdown, lineNumberGutter } from "@/components/editor/extensions";
+import { matchGlobalShortcut, type Intent } from "@/components/editor/shortcuts";
+import { isH1Line } from "@/lib/markdown-title";
 import { useWorkspaceStore, type VimMode } from "@/lib/store";
 import type { Settings } from "@/lib/schemas";
 
 export type EditorHandle = {
   focus: () => void;
   getContent: () => string;
-  getView: () => EditorView | null;
+  /** Replace the document's first H1 line with `# title`, or prepend one. */
+  replaceFirstH1: (title: string) => void;
+  /** Run a genuine Vim ex command; returns false if the engine rejected it. */
+  execVimEx: (command: string) => boolean;
 };
 
 type Props = {
@@ -33,12 +39,9 @@ type Props = {
   vimEnabled: boolean;
   readOnly?: boolean;
   onChange?: () => void;
-  onOpenCommandDock: () => void;
-  onNewNote: () => void;
-  onOpenQuickSwitcher: () => void;
-  onOpenSearch: () => void;
-  onToggleSidebar: () => void;
-  onForceSave: () => void;
+  // The only bridge from the editor to app actions. Read-only callers (the
+  // shared-note view) simply omit it -- no no-op callback wall.
+  onIntent?: (intent: Intent) => void;
 };
 
 function mapVimMode(raw: string | undefined): VimMode {
@@ -56,12 +59,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     vimEnabled,
     readOnly = false,
     onChange,
-    onOpenCommandDock,
-    onNewNote,
-    onOpenQuickSwitcher,
-    onOpenSearch,
-    onToggleSidebar,
-    onForceSave,
+    onIntent,
   },
   ref,
 ) {
@@ -75,32 +73,55 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
   const wrapCompartment = useRef(new Compartment()).current;
   const tabSizeCompartment = useRef(new Compartment()).current;
 
-  // Stable across renders so the update listener always calls the latest
-  // callback without needing to recreate the whole EditorView.
+  // Stable across renders so the listeners always call the latest callbacks
+  // without needing to recreate the whole EditorView.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const callbacksRef = useRef({
-    onOpenCommandDock,
-    onNewNote,
-    onOpenQuickSwitcher,
-    onOpenSearch,
-    onToggleSidebar,
-    onForceSave,
-  });
-  callbacksRef.current = {
-    onOpenCommandDock,
-    onNewNote,
-    onOpenQuickSwitcher,
-    onOpenSearch,
-    onToggleSidebar,
-    onForceSave,
-  };
+  const onIntentRef = useRef(onIntent);
+  onIntentRef.current = onIntent;
 
-  useImperativeHandle(ref, () => ({
-    focus: () => viewRef.current?.focus(),
-    getContent: () => viewRef.current?.state.doc.toString() ?? "",
-    getView: () => viewRef.current,
-  }));
+  const replaceFirstH1 = useCallback((title: string) => {
+    const view = viewRef.current;
+    if (!view) return;
+    const doc = view.state.doc;
+    let targetLine = 0;
+    for (let i = 1; i <= doc.lines; i++) {
+      if (isH1Line(doc.line(i).text)) {
+        targetLine = i;
+        break;
+      }
+    }
+    if (targetLine) {
+      const line = doc.line(targetLine);
+      view.dispatch({ changes: { from: line.from, to: line.to, insert: `# ${title}` } });
+    } else {
+      view.dispatch({ changes: { from: 0, to: 0, insert: `# ${title}\n\n` } });
+    }
+  }, []);
+
+  const execVimEx = useCallback((command: string): boolean => {
+    const view = viewRef.current;
+    if (!view) return true;
+    const cm = getCM(view);
+    if (!cm) return true;
+    try {
+      Vim.handleEx(cm as Parameters<typeof Vim.handleEx>[0], command);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => viewRef.current?.focus(),
+      getContent: () => viewRef.current?.state.doc.toString() ?? "",
+      replaceFirstH1,
+      execVimEx,
+    }),
+    [replaceFirstH1, execVimEx],
+  );
 
   const [ready, setReady] = useState(false);
 
@@ -191,65 +212,23 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     }
 
     // Capture-phase so this always wins over @replit/codemirror-vim's own
-    // key handling on view.dom's descendants (contentDOM) -- see
-    // command-dispatch.ts for why these commands aren't registered through
-    // Vim.defineEx instead.
+    // key handling on view.dom's descendants (contentDOM). One table decides
+    // what each chord means (see shortcuts.ts) -- the shell has its own
+    // adapter for when focus is outside the editor.
     function handleCapture(event: KeyboardEvent) {
-      const cb = callbacksRef.current;
-      const ctrl = event.ctrlKey || event.metaKey;
-
-      if (ctrl && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        event.stopPropagation();
-        cb.onForceSave();
-        return;
-      }
-      if (ctrl && event.key.toLowerCase() === "n") {
-        event.preventDefault();
-        event.stopPropagation();
-        cb.onNewNote();
-        return;
-      }
-      if (ctrl && event.key.toLowerCase() === "p") {
-        event.preventDefault();
-        event.stopPropagation();
-        cb.onOpenQuickSwitcher();
-        return;
-      }
-      // Ctrl+/ for the global (every note) search overlay -- plain '/' is
-      // left alone below so codemirror-vim's own native, in-buffer search
-      // keeps working (highlight-all + n/N, the real Vim experience).
-      // Not mode-gated, same as the other Ctrl shortcuts above: unlike ':'
-      // and '/' on their own, Ctrl+/ can't collide with a literal
-      // character typed in INSERT.
-      if (ctrl && event.key === "/") {
-        event.preventDefault();
-        event.stopPropagation();
-        cb.onOpenSearch();
-        return;
-      }
-      if (ctrl && event.key.toLowerCase() === "b") {
-        event.preventDefault();
-        event.stopPropagation();
-        cb.onToggleSidebar();
-        return;
-      }
-      if (
-        cm &&
-        event.key === ":" &&
-        !ctrl &&
-        !event.altKey &&
-        // Read the vim engine's own live mode rather than a mirrored ref --
-        // if a vim-mode-change event were ever missed (or fired before this
-        // listener attached), a mirrored value could drift and get ':'
-        // stuck working in the wrong mode. This is the actual source of
-        // truth CodeMirror-vim itself uses.
-        mapVimMode(cm.state.vim?.mode) === "NORMAL"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-        cb.onOpenCommandDock();
-      }
+      if (readOnly) return;
+      // Read the vim engine's own live mode rather than a mirrored ref --
+      // if a vim-mode-change event were ever missed, a mirrored value could
+      // drift and get ':' stuck working in the wrong mode. This is the
+      // actual source of truth CodeMirror-vim itself uses. With vim off
+      // (mobile/EDIT) there is no engine, so mode is EDIT and the
+      // mode-gated rows simply don't match.
+      const liveMode: VimMode | null = cm ? mapVimMode(cm.state.vim?.mode) : "EDIT";
+      const intent = matchGlobalShortcut(event, liveMode);
+      if (!intent) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onIntentRef.current?.(intent);
     }
     view.dom.addEventListener("keydown", handleCapture, true);
 

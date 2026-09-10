@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
+import { GLOBAL_SHORTCUTS } from "@/components/editor/shortcuts";
+
+// The GLOBAL section is generated from the one shortcut table, so it can
+// never drift from what the listeners actually dispatch. Mode-scoped rows
+// (the ':') belong to the COMMAND/NORMAL sections instead.
+const GLOBAL_KEYS: [string, string][] = GLOBAL_SHORTCUTS.filter((s) => s.ctrl).map(
+  (s) => [s.label, s.description],
+);
 
 const SECTIONS: { title: string; keys: [string, string][] }[] = [
   {
@@ -47,13 +55,7 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
   },
   {
     title: "GLOBAL",
-    keys: [
-      ["Ctrl+N", "new note"],
-      ["Ctrl+P", "quick switcher"],
-      ["Ctrl+S", "force write"],
-      ["Ctrl+B", "toggle sidebar"],
-      ["/", "search (outside editor)"],
-    ],
+    keys: GLOBAL_KEYS,
   },
 ];
 

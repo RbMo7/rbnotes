@@ -10,13 +10,20 @@ import { CommandDock } from "@/components/buffer/CommandDock";
 import { HelpBuffer } from "@/components/overlay/HelpBuffer";
 import { InspectorPanel, type ShareViewer } from "@/components/inspect/InspectorPanel";
 import { StatusToast } from "@/components/auth/StatusToast";
-import { dispatchCommand, type CommandContext } from "@/components/editor/command-dispatch";
+import {
+  dispatchCommand,
+  type CommandContext,
+  type EditorOps,
+  type WorkspaceOps,
+} from "@/components/editor/command-dispatch";
+import { dispatchIntent, type Intent } from "@/components/editor/shortcuts";
+import { useIntentHandlers } from "@/components/editor/use-intent-handlers";
 import { useManualSave } from "@/components/editor/use-manual-save";
+import { useNoteOperations } from "@/components/buffer/use-note-operations";
 import { useWorkspaceStore } from "@/lib/store";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { displayFilename } from "@/lib/format";
-import { useNotesQuery, useNotesMutations, useCreateNote, computeBufferNumber } from "@/lib/notes-query";
-import { setNoteFlagsAction, deleteNoteAction } from "@/server/actions/notes";
+import { useNotesQuery, useNotesMutations, computeBufferNumber } from "@/lib/notes-query";
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
 import { saveSettingsAction } from "@/server/actions/settings";
 import type { Settings } from "@/lib/schemas";
@@ -40,8 +47,7 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   });
 
   const { data: notes } = useNotesQuery();
-  const { updateNote, removeNote } = useNotesMutations();
-  const createNote = useCreateNote();
+  const { updateNote } = useNotesMutations();
   // Both scoped to this user at the one fetch that populated the cache
   // (see (app)/layout.tsx) -- a note that doesn't exist, or belongs to
   // someone else, simply isn't in `notes` either way. See "not found"
@@ -65,12 +71,15 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   const inspectorOpen = useWorkspaceStore((s) => s.inspectorOpen);
   const setInspectorOpen = useWorkspaceStore((s) => s.setInspectorOpen);
   const toggleInspector = useWorkspaceStore((s) => s.toggleInspector);
-  const toggleSidebar = useWorkspaceStore((s) => s.toggleSidebar);
-  const setMobileSidebarOpen = useWorkspaceStore((s) => s.setMobileSidebarOpen);
-  const mobileSidebarOpen = useWorkspaceStore((s) => s.mobileSidebarOpen);
-  const setQuickSwitcherOpen = useWorkspaceStore((s) => s.setQuickSwitcherOpen);
-  const setSearchOpen = useWorkspaceStore((s) => s.setSearchOpen);
   const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);
+
+  // The editor's own listener produces intents; this is the one dispatcher
+  // that turns them into effects -- the same handler set the shell uses.
+  const intentHandlers = useIntentHandlers();
+  const handleIntent = useCallback(
+    (intent: Intent) => dispatchIntent(intent, intentHandlers),
+    [intentHandlers],
+  );
 
   // Per-note local state (helpOpen, shareToken, shareViewers) resets for
   // free: the page renders `<BufferWorkspace key={noteId} .../>`, so React
@@ -96,11 +105,31 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   );
   const { markDirty, write, isDirty } = useManualSave(noteId, getContent, handleSaved);
 
+  // Ctrl+S reaches whichever buffer is mounted through this registration --
+  // the shell listener lives above the per-route tree and can't call `write`
+  // directly.
+  useEffect(() => {
+    useWorkspaceStore.getState().registerActiveSave(() => {
+      void write();
+    });
+    return () => useWorkspaceStore.getState().registerActiveSave(null);
+  }, [write]);
+
   const showNotify = useCallback((message: string, tone: "info" | "error" = "info") => {
     setNotify(message);
     setNotifyTone(tone);
     window.setTimeout(() => setNotify(null), 3500);
   }, []);
+
+  // Note operations (with the archive-vs-delete policy) live in their own
+  // module; this component just wires them into the command context.
+  const noteOps = useNoteOperations({
+    noteId,
+    getContent,
+    save: write,
+    isDirty,
+    notify: showNotify,
+  });
 
   const loadShareInfo = useCallback(() => {
     setShareLoading(true);
@@ -154,89 +183,44 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
     [settings, setSettingsStore],
   );
 
-  const commandContext: CommandContext = {
-    save: write,
-    // `force` (from `:q!`) is meaningful at the call site in
-    // command-dispatch.ts (it's what bypasses the dirty-buffer refusal
-    // before quit() is ever called); by the time we're here there's
-    // nothing left to branch on.
-    //
+  const workspaceOps: WorkspaceOps = {
+    // Command failures are surfaced in the error tone; informational command
+    // output (rename, share) goes through showNotify's default.
+    notify: (message) => showNotify(message, "error"),
+    openHelp: () => setHelpOpen(true),
     // Deliberately never navigates. This is a single persistent pane with
-    // an always-visible sidebar, not a multi-window Vim session -- there
-    // is no "previous buffer" to reveal by leaving, and routing anywhere
-    // (even to a genuinely different note) reads as the app randomly
-    // teleporting you right after you asked it to save. `:q` instead
-    // closes whichever overlay is on top (mirroring real Vim's `:q`
-    // closing a help/preview window), or is a no-op if the plain note
-    // view is all that's showing -- the existing [Saved] indicator
-    // already confirms the write, so there's nothing more to communicate.
+    // an always-visible sidebar, not a multi-window Vim session -- `:q`
+    // closes whichever overlay is on top (mirroring real Vim's `:q` closing
+    // a help/preview window), or is a no-op if the plain note view is all
+    // that's showing.
     quit: () => {
       if (helpOpen) setHelpOpen(false);
       else if (inspectorOpen) setInspectorOpen(false);
     },
-    isDirty,
-    createNew: createNote,
-    // The actual rename (splicing the new title into the document's first
-    // `#` heading, then persisting) happens in command-dispatch.ts, which
-    // has direct access to the CodeMirror view -- a note's title is that
-    // heading, not separate metadata (see lib/markdown-title.ts). This is
-    // just the optimistic cache update so the header/sidebar filename
-    // reflect it instantly, ahead of the save round-trip's own
-    // authoritative title.
-    rename: (newTitle) => {
-      updateNote(noteId, { title: newTitle });
-      showNotify(`RENAME: "${displayFilename(newTitle)}" written  [OK]`);
-    },
-    // Same instant pattern as :new (see useCreateNote): update the cache
-    // and navigate first, persist in the background after. There's
-    // nothing to roll back to on failure -- archived/deleted is a
-    // one-way door either way, same as real Vim's own `:bd`.
-    //
-    // An empty buffer is deleted for real rather than archived, bang or
-    // not -- there is nothing worth keeping in an "Archive" for a note
-    // that was never written into (this is also what makes deleting an
-    // unsaved `:new` note correct: it doesn't exist server-side yet, so
-    // deleteNoteAction's background call is a harmless no-op there).
-    deleteNote: (hard) => {
-      const isEmpty = getContent().trim().length === 0;
-      if (hard || isEmpty) {
-        removeNote(noteId);
-        deleteNoteAction({ noteId }).catch(() => {});
-      } else {
-        updateNote(noteId, { archived: true });
-        setNoteFlagsAction({ noteId, archived: true }).catch(() => {});
-      }
-      router.push("/notes");
-    },
-    openHelp: () => setHelpOpen(true),
-    toggleSidebar: () => {
-      if (isDesktop) toggleSidebar();
-      else setMobileSidebarOpen(!mobileSidebarOpen);
-    },
+    toggleSidebar: intentHandlers.toggleSidebar,
     toggleInspector,
     share: handleShare,
     unshare: handleUnshare,
     updateSettings,
-    notify: (message) => showNotify(message, "error"),
   };
 
-  const handleCommandSubmit = useCallback(
-    (raw: string) => {
-      setCommandDockOpen(false);
-      const view = editorRef.current?.getView();
-      if (view) {
-        // Fire-and-forget from this synchronous handler; dispatchCommand
-        // is async only so `:wq` can await the write before quitting --
-        // nothing here needs to block on it.
-        void dispatchCommand(raw, view, commandContext);
-      }
-      editorRef.current?.focus();
-    },
-    // commandContext is rebuilt each render but always reflects current
-    // closures, which is what we want here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [setCommandDockOpen],
-  );
+  // Rebuilt each render so the dispatcher always sees current closures.
+  const commandContext: CommandContext = { note: noteOps, workspace: workspaceOps };
+
+  const handleCommandSubmit = (raw: string) => {
+    setCommandDockOpen(false);
+    const handle = editorRef.current;
+    if (handle) {
+      const ops: EditorOps = {
+        replaceFirstH1: handle.replaceFirstH1,
+        execVimEx: handle.execVimEx,
+      };
+      // Fire-and-forget from this synchronous handler; dispatchCommand is
+      // async only so `:wq` can await the write before quitting.
+      void dispatchCommand(raw, ops, commandContext);
+    }
+    editorRef.current?.focus();
+  };
 
   // notes is undefined only on a genuine cache miss (should be rare -- the
   // layout always prefetches it); note is undefined when the id doesn't
@@ -301,15 +285,7 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
                 settings={settings}
                 vimEnabled={vimEnabled}
                 onChange={markDirty}
-                onOpenCommandDock={() => setCommandDockOpen(true)}
-                onNewNote={createNote}
-                onOpenQuickSwitcher={() => setQuickSwitcherOpen(true)}
-                onOpenSearch={() => setSearchOpen(true)}
-                onToggleSidebar={() => {
-                  if (isDesktop) toggleSidebar();
-                  else setMobileSidebarOpen(!mobileSidebarOpen);
-                }}
-                onForceSave={write}
+                onIntent={handleIntent}
               />
             </div>
             {helpOpen && <HelpBuffer onClose={() => setHelpOpen(false)} />}

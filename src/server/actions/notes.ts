@@ -24,11 +24,10 @@ export async function getAllNotesAction() {
 
 export async function saveNoteContentAction(input: unknown) {
   const user = await getAuthedUser();
-  const { noteId, content, clientRevision } = updateNoteContentSchema.parse(input);
+  const { noteId, content } = updateNoteContentSchema.parse(input);
   const note = await notes.upsertNoteContent(user.id, noteId, content);
   return {
     updatedAt: note.updatedAt,
-    clientRevision,
     title: note.title,
   };
 }
