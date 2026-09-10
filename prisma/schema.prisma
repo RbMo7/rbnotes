@@ -1,0 +1,79 @@
+// RbNotes — Prisma schema
+// Connects to Supabase Postgres. Auth/session state lives in Supabase Auth
+// (schema `auth`); `Profile` mirrors the authenticated user by id so notes
+// can carry a normal foreign key without crossing schemas at query time.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Profile {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  notes Note[]
+  views NoteShareView[]
+
+  @@map("profiles")
+}
+
+model Note {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  title     String    @default("untitled")
+  content   String    @default("")
+  pinned    Boolean   @default(false)
+  archived  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user  Profile    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  share NoteShare?
+
+  @@index([userId])
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([userId, archived])
+  @@index([userId, pinned])
+  @@index([userId, deletedAt])
+  @@map("notes")
+}
+
+model NoteShare {
+  id        String    @id @default(uuid()) @db.Uuid
+  noteId    String    @unique @db.Uuid
+  token     String    @unique
+  createdBy String    @db.Uuid
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  note  Note            @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  views NoteShareView[]
+
+  @@index([token])
+  @@map("note_shares")
+}
+
+model NoteShareView {
+  id            String   @id @default(uuid()) @db.Uuid
+  shareId       String   @db.Uuid
+  viewerId      String   @db.Uuid
+  viewCount     Int      @default(1)
+  firstViewedAt DateTime @default(now())
+  lastViewedAt  DateTime @updatedAt
+
+  share  NoteShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  viewer Profile   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@unique([shareId, viewerId])
+  @@index([shareId, lastViewedAt(sort: Desc)])
+  @@map("note_share_views")
+}
