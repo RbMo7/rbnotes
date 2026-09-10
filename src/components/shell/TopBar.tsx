@@ -1,22 +1,27 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
 import { GitCommitHorizontal, PanelLeft, User } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
+import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { useNotesQuery } from "@/lib/notes-query";
+import { displayFilename } from "@/lib/format";
 import { signOutAction } from "@/server/actions/auth";
 
-const TABS = [
-  { href: "/notes", label: "BUFFER", match: "/notes" },
-  { href: "/tags", label: "TAGS", match: "/tags" },
-  { href: "/graph", label: "GRAPH", match: "/graph" },
-] as const;
+const SECTION_TITLES: Record<string, string> = {
+  "/": "Dashboard",
+  "/settings": "Settings",
+};
 
-export function TopNav({ email }: { email: string }) {
+export function TopBar({ email }: { email: string }) {
   const pathname = usePathname();
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useWorkspaceStore((s) => s.toggleSidebar);
+  const toggleInspector = useWorkspaceStore((s) => s.toggleInspector);
+  const { activeNoteId } = useWorkspace();
+  const { data: notes } = useNotesQuery();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -30,45 +35,44 @@ export function TopNav({ email }: { email: string }) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // Derived synchronously from the same source WorkspaceBuffer reads,
+  // rather than the store's activeFilename -- that field is written from an
+  // effect and would lag a frame behind every buffer switch.
+  const activeNote = activeNoteId ? notes?.find((n) => n.id === activeNoteId) : undefined;
+  const title = activeNote ? displayFilename(activeNote.title) : (SECTION_TITLES[pathname] ?? "");
+
   return (
     <header
       data-collapsed={collapsed}
-      className="fixed top-0 left-sidebar-width right-0 h-14 bg-surface/90 border-b border-outline-variant/30 z-30 flex items-center justify-between px-space-6 backdrop-blur-sm transition-[left] duration-150 data-[collapsed=true]:left-0"
+      className="fixed top-0 left-sidebar-width right-0 h-header-height bg-surface/90 border-b border-outline-variant/30 z-30 flex items-center justify-between px-space-6 backdrop-blur-sm transition-[left] duration-150 data-[collapsed=true]:left-0"
     >
-      <div className="flex items-center gap-space-4">
+      <div className="flex items-center gap-space-4 min-w-0">
         <button
           onClick={toggleSidebar}
-          className="text-on-surface-variant hover:text-on-surface transition-colors -ml-space-2 p-space-1"
+          className="text-on-surface-variant hover:text-on-surface transition-colors -ml-space-2 p-space-1 shrink-0"
           title="Toggle sidebar [Ctrl+B]"
           aria-label="Toggle sidebar"
         >
           <PanelLeft size={16} strokeWidth={1.5} />
         </button>
-        <nav className="flex items-center gap-space-4">
-          {TABS.map((tab) => {
-            const active = pathname.startsWith(tab.match);
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                aria-current={active ? "page" : undefined}
-                className={`font-label-md text-label-md pb-space-px transition-colors border-b-2 ${
-                  active
-                    ? "text-on-surface border-primary"
-                    : "text-on-surface-variant hover:text-on-surface border-transparent"
-                }`}
-              >
-                {tab.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <span className="text-primary font-headline-md text-headline-md tracking-tight truncate">
+          {title}
+        </span>
       </div>
-      <div className="flex items-center gap-space-3">
+      <div className="flex items-center gap-space-3 shrink-0">
         <div className="flex items-center gap-space-2 text-on-surface-variant font-label-sm text-label-sm bg-surface-container px-space-2 py-space-1 rounded">
           <GitCommitHorizontal size={14} strokeWidth={1.5} />
           <span>main</span>
         </div>
+        {activeNote && (
+          <button
+            onClick={toggleInspector}
+            className="px-space-2 py-space-1 bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm rounded transition-colors"
+            title="Toggle Side Inspector [:insp]"
+          >
+            :insp
+          </button>
+        )}
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setMenuOpen((v) => !v)}

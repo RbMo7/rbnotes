@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Editor, type EditorHandle } from "@/components/editor/Editor";
-import { BufferHeaderNormal } from "@/components/buffer/BufferHeaderNormal";
 import { VimStatuslineDock } from "@/components/buffer/VimStatuslineDock";
 import { QuickActionsStrip } from "@/components/buffer/QuickActionsStrip";
 import { CommandDock } from "@/components/buffer/CommandDock";
@@ -298,11 +297,7 @@ export function WorkspaceBuffer() {
   return (
     <div className="flex h-full">
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="w-full px-space-4 sm:px-space-8 pt-space-4 sm:pt-space-2 flex-1 flex flex-col min-h-0">
-          <div className="flex items-center mb-space-4 shrink-0">
-            <BufferHeaderNormal title={note.title} onToggleInspector={toggleInspector} />
-          </div>
-
+        <div className="w-full px-space-4 sm:px-space-8 pt-space-4 flex-1 flex flex-col min-h-0">
           <div className="w-full flex-1 min-h-[320px] relative bg-surface-dim overflow-hidden rounded-lg">
             {mode === "INSERT" && (
               <div className="absolute -top-12 left-1/4 w-96 h-28 bg-primary/10 rounded-full blur-3xl pointer-events-none" />

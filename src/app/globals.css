@@ -126,6 +126,7 @@
   /* Layout dimensions */
   --spacing-sidebar-width: 16rem;
   --spacing-status-bar-height: 1.5rem;
+  --spacing-header-height: 3.5rem;
   --spacing-buffer-tab-height: 2.25rem;
   --spacing-gutter-editor: 3.5rem;
 

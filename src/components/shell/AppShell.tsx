@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, type ReactNode } from "react";
-import { TopNav } from "@/components/shell/TopNav";
+import { TopBar } from "@/components/shell/TopBar";
 import { StatusBar } from "@/components/shell/StatusBar";
 import { QuickSwitcher } from "@/components/overlay/QuickSwitcher";
 import { SearchPalette } from "@/components/overlay/SearchPalette";
@@ -42,10 +42,10 @@ export function AppShell({
 
   return (
     <>
-      <TopNav email={email} />
+      <TopBar email={email} />
       <div
         data-collapsed={collapsed}
-        className="pl-0 lg:data-[collapsed=false]:pl-sidebar-width transition-[padding] duration-150 pt-14 pb-status-bar-height h-dvh overflow-y-auto bg-surface"
+        className="pl-0 lg:data-[collapsed=false]:pl-sidebar-width transition-[padding] duration-150 pt-header-height pb-status-bar-height h-dvh overflow-y-auto bg-surface"
       >
         {children}
       </div>
