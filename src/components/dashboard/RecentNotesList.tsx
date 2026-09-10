@@ -156,7 +156,9 @@ export function RecentNotesList() {
           >
             <span className="flex items-center gap-space-2 truncate">
               <FileText size={14} strokeWidth={1.5} className="text-outline shrink-0" />
-              <span className="truncate">{displayFilename(note.title)}</span>
+              <span className="truncate" title={displayFilename(note.title)}>
+                {displayFilename(note.title)}
+              </span>
             </span>
             <span className="font-label-sm text-label-sm text-outline/70 shrink-0">
               {formatSidebarTimestamp(new Date(note.updatedAt))}

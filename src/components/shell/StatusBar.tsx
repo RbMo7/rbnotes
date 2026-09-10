@@ -30,7 +30,9 @@ export function StatusBar({ filename }: { filename: string | null }) {
           {MODE_LABEL[mode]}
         </div>
         <div className="flex items-center gap-space-2 text-on-surface-variant min-w-0">
-          <span className="truncate">{filename ?? "no buffer"}</span>
+          <span className="truncate" title={filename ?? undefined}>
+            {filename ?? "no buffer"}
+          </span>
           {filename && (
             <span className={saveState === "clean" ? "text-primary" : "text-outline"}>
               {saveState === "saving"

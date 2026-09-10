@@ -44,7 +44,9 @@ export function NoteListItem({
           strokeWidth={1.5}
           className="text-outline group-hover:text-primary shrink-0"
         />
-        <span className="truncate">{displayFilename(title)}</span>
+        <span className="truncate" title={displayFilename(title)}>
+          {displayFilename(title)}
+        </span>
       </span>
       <span className="font-label-sm text-label-sm text-outline/70 shrink-0">
         {formatSidebarTimestamp(updatedAt)}

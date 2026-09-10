@@ -45,7 +45,9 @@ export function SidebarTagList({
                   <ChevronRight size={12} strokeWidth={2} className="text-outline shrink-0" />
                 )}
                 <Hash size={14} strokeWidth={1.5} className="text-outline shrink-0" />
-                <span className="truncate">{t.tag}</span>
+                <span className="truncate" title={t.tag}>
+                  {t.tag}
+                </span>
               </span>
               <span className="font-label-sm text-label-sm text-outline/70 shrink-0">
                 {t.count}

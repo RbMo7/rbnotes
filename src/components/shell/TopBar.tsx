@@ -55,7 +55,10 @@ export function TopBar({ email }: { email: string }) {
         >
           <PanelLeft size={16} strokeWidth={1.5} />
         </button>
-        <span className="text-primary font-headline-md text-headline-md tracking-tight truncate">
+        <span
+          className="text-primary font-headline-md text-headline-md tracking-tight truncate"
+          title={title}
+        >
           {title}
         </span>
       </div>
