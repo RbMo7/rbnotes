@@ -15,7 +15,7 @@ function formatViewerTime(iso: string): string {
 
 /**
  * The `:insp` side inspector -- the Stitch NORMAL header's own button, given
- * an actual panel behind it. Purely presentational: BufferWorkspace owns
+ * an actual panel behind it. Purely presentational: WorkspaceBuffer owns
  * the share/viewer state so `:share`/`:unshare` and this panel's buttons
  * stay in sync.
  */

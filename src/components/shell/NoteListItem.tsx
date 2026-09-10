@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { FileText, Archive } from "lucide-react";
 import { formatSidebarTimestamp } from "@/lib/grouping";
 import { displayFilename } from "@/lib/format";
+import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { noteHref } from "@/components/workspace/note-path";
 
 export function NoteListItem({
   id,
@@ -17,13 +17,24 @@ export function NoteListItem({
   updatedAt: Date;
   archived: boolean;
 }) {
-  const pathname = usePathname();
-  const active = pathname === `/notes/${id}`;
+  const { activeNoteId, openNote } = useWorkspace();
+  const active = activeNoteId === id;
   const Icon = archived ? Archive : FileText;
 
   return (
-    <Link
-      href={`/notes/${id}`}
+    // A real <a href> (not a plain button) so middle-click/ctrl-click "open
+    // in new tab" and right-click "copy link" keep working -- the click
+    // handler intercepts a plain left click for the instant in-app switch,
+    // matching ADR-0001 (never round-trip next/navigation for this).
+    <a
+      href={noteHref(id)}
+      onClick={(e) => {
+        if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+          return;
+        }
+        e.preventDefault();
+        openNote(id);
+      }}
       data-active={active}
       className="w-full flex items-center justify-between px-space-2 py-space-1 font-body-sm text-body-sm rounded group data-[active=true]:bg-surface-container-high data-[active=true]:text-on-surface data-[active=true]:font-medium data-[active=true]:border-l-2 data-[active=true]:border-primary text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
     >
@@ -38,6 +49,6 @@ export function NoteListItem({
       <span className="font-label-sm text-label-sm text-outline/70 shrink-0">
         {formatSidebarTimestamp(updatedAt)}
       </span>
-    </Link>
+    </a>
   );
 }

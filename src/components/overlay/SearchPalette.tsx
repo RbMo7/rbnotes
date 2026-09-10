@@ -1,18 +1,13 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { FileText } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
 import { displayFilename } from "@/lib/format";
 import { useNotesQuery } from "@/lib/notes-query";
-
-function matchedLine(content: string, query: string): string | null {
-  const q = query.toLowerCase();
-  const line = content.split("\n").find((l) => l.toLowerCase().includes(q));
-  return line?.trim().slice(0, 120) ?? null;
-}
+import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { useGlobalSearch } from "@/components/overlay/useGlobalSearch";
 
 function highlight(text: string, query: string) {
   if (!query) return text;
@@ -28,27 +23,18 @@ function highlight(text: string, query: string) {
 }
 
 /**
- * `/` from anywhere outside the editor -- searches note titles and content.
- * Filters the already-loaded notes-query cache in memory instead of
- * calling the server per keystroke, so results are instant with no
- * debounce needed.
+ * Ctrl+/ from anywhere -- searches note titles and content. See
+ * useGlobalSearch for the warm-cache-vs-server-fallback resolution order.
  */
 export function SearchPalette() {
   const open = useWorkspaceStore((s) => s.searchOpen);
   const setOpen = useWorkspaceStore((s) => s.setSearchOpen);
   const setPendingSearchMatch = useWorkspaceStore((s) => s.setPendingSearchMatch);
   const { data: notes = [] } = useNotesQuery();
-  const router = useRouter();
+  const { openNote } = useWorkspace();
   const [query, setQuery] = useState("");
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    return notes
-      .filter((n) => !n.archived && (n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q)))
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, 30);
-  }, [notes, query]);
+  const { results, loading } = useGlobalSearch(query, notes);
 
   useEffect(() => {
     if (!open) {
@@ -73,43 +59,41 @@ export function SearchPalette() {
               className="flex-1 bg-transparent outline-none border-none text-on-surface placeholder-on-surface-variant/40"
               aria-label="Search"
             />
+            {loading && <span className="text-outline text-label-sm font-label-sm">…</span>}
           </div>
           <div className="max-h-96 overflow-y-auto py-space-2">
-            {query && results.length === 0 && (
+            {query && !loading && results.length === 0 && (
               <p className="px-space-4 py-space-2 font-body-sm text-body-sm text-outline/50">
                 ~ no matches
               </p>
             )}
-            {results.map((note) => {
-              const snippet = matchedLine(note.content, query);
-              return (
-                <button
-                  key={note.id}
-                  onClick={() => {
-                    setOpen(false);
-                    // Consumed once by BufferWorkspace on mount (see
-                    // store.ts) to select the matched text instead of
-                    // just opening the note at wherever the cursor last
-                    // was. If the query doesn't literally appear in the
-                    // content (a title-only match, say), Editor.tsx's
-                    // lookup simply finds nothing and this is a no-op.
-                    setPendingSearchMatch({ noteId: note.id, query });
-                    router.push(`/notes/${note.id}`);
-                  }}
-                  className="w-full flex flex-col gap-space-1 px-space-4 py-space-2 text-left hover:bg-surface-container-high"
-                >
-                  <span className="flex items-center gap-space-2 font-body-sm text-body-sm text-on-surface">
-                    <FileText size={14} strokeWidth={1.5} className="text-outline shrink-0" />
-                    {highlight(displayFilename(note.title), query)}
+            {results.map((result) => (
+              <button
+                key={result.noteId}
+                onClick={() => {
+                  setOpen(false);
+                  // Consumed once by WorkspaceBuffer on activation (see
+                  // store.ts) to select the matched text instead of just
+                  // opening the note at wherever the cursor last was. If
+                  // the query doesn't literally appear in the content (a
+                  // title-only match, say), Editor.tsx's lookup simply
+                  // finds nothing and this is a no-op.
+                  setPendingSearchMatch({ noteId: result.noteId, query });
+                  openNote(result.noteId);
+                }}
+                className="w-full flex flex-col gap-space-1 px-space-4 py-space-2 text-left hover:bg-surface-container-high"
+              >
+                <span className="flex items-center gap-space-2 font-body-sm text-body-sm text-on-surface">
+                  <FileText size={14} strokeWidth={1.5} className="text-outline shrink-0" />
+                  {highlight(displayFilename(result.title), query)}
+                </span>
+                {result.snippet && (
+                  <span className="pl-space-6 font-label-sm text-label-sm text-on-surface-variant truncate">
+                    {highlight(result.snippet, query)}
                   </span>
-                  {snippet && (
-                    <span className="pl-space-6 font-label-sm text-label-sm text-on-surface-variant truncate">
-                      {highlight(snippet, query)}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                )}
+              </button>
+            ))}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

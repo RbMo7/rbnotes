@@ -1,4 +1,4 @@
-import type { FullNote } from "@/lib/note-types";
+import type { NoteRecord } from "@/lib/note-types";
 
 // Matches a leading `#word` the way the Stitch INSERT screen highlights
 // frontmatter tags (`#distributed-systems`, `#queue-arch`, `#benchmarks`):
@@ -22,11 +22,11 @@ export type TagSummary = { tag: string; count: number; noteIds: string[] };
  * opening it never fetches anything; it's the same data the sidebar and
  * editor already have in memory.
  */
-export function computeTagSummaries(notes: Pick<FullNote, "id" | "content" | "archived">[]): TagSummary[] {
+export function computeTagSummaries(notes: Pick<NoteRecord, "id" | "content" | "archived">[]): TagSummary[] {
   const byTag = new Map<string, TagSummary>();
   for (const note of notes) {
     if (note.archived) continue;
-    for (const tag of extractTags(note.content)) {
+    for (const tag of extractTags(note.content ?? "")) {
       const entry = byTag.get(tag) ?? { tag, count: 0, noteIds: [] };
       entry.count += 1;
       entry.noteIds.push(note.id);
@@ -36,10 +36,10 @@ export function computeTagSummaries(notes: Pick<FullNote, "id" | "content" | "ar
   return [...byTag.values()].sort((a, b) => b.count - a.count);
 }
 
-export function filterNotesByTag<T extends Pick<FullNote, "content" | "archived">>(
+export function filterNotesByTag<T extends Pick<NoteRecord, "content" | "archived">>(
   notes: T[],
   tag: string,
 ): T[] {
   const normalized = tag.toLowerCase();
-  return notes.filter((n) => !n.archived && extractTags(n.content).includes(normalized));
+  return notes.filter((n) => !n.archived && extractTags(n.content ?? "").includes(normalized));
 }

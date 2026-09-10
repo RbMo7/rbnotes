@@ -2,24 +2,42 @@
 
 import { getAuthedUser } from "@/lib/auth";
 import * as notes from "@/lib/notes";
-import { noteIdSchema, setNoteFlagSchema, updateNoteContentSchema } from "@/lib/schemas";
+import {
+  noteIdSchema,
+  setNoteFlagSchema,
+  searchNotesSchema,
+  updateNoteContentSchema,
+} from "@/lib/schemas";
 
 // Every action here re-derives the user from the session via
 // getAuthedUser() and never trusts a userId passed in from the client.
 // Zod schemas for these actions deliberately have no userId field.
 
 /**
- * The one real fetch behind the whole app: every note, full content
- * included. Used both to prefetch/hydrate the query cache server-side on
- * first load ((app)/layout.tsx calls listAllNotesFull directly for that)
- * and as the client-side queryFn for lib/notes-query.ts's useNotesQuery --
- * e.g. if the cache is ever explicitly invalidated. In steady state this
- * doesn't run again: every mutation below writes its result straight into
- * the cache instead.
+ * First paint's one real fetch: every note, metadata only. Used both to
+ * prefetch/hydrate the query cache server-side on first load
+ * ((app)/layout.tsx calls listAllNotesMeta directly for that) and as the
+ * client-side queryFn for lib/notes-query.ts's useNotesQuery -- e.g. if the
+ * cache is ever explicitly invalidated.
  */
-export async function getAllNotesAction() {
+export async function getAllNotesMetaAction() {
   const user = await getAuthedUser();
-  return notes.listAllNotesFull(user.id);
+  return notes.listAllNotesMeta(user.id);
+}
+
+/**
+ * The per-note content fetch: cold-open and the background warm-up loop are
+ * its only two callers (see lib/notes-query.ts's warmNoteContent). Throws
+ * on a miss (wrong user, wrong id, deleted) -- there is nothing sensible to
+ * warm a buffer with in that case, and the caller already knows the id came
+ * from a prefetched, user-scoped metadata list.
+ */
+export async function getNoteContentAction(input: unknown) {
+  const user = await getAuthedUser();
+  const { noteId } = noteIdSchema.parse(input);
+  const content = await notes.getNoteContent(user.id, noteId);
+  if (content === null) throw new Error("Note not found");
+  return { content };
 }
 
 export async function saveNoteContentAction(input: unknown) {
@@ -42,4 +60,15 @@ export async function deleteNoteAction(input: unknown) {
   const user = await getAuthedUser();
   const { noteId } = noteIdSchema.parse(input);
   await notes.softDeleteNote(user.id, noteId);
+}
+
+/**
+ * The server-side fallback branch of hybrid global search (issue: hybrid
+ * global search) -- used only while the client's warm cache isn't complete
+ * yet. See lib/notes.ts's searchNoteContents for the query itself.
+ */
+export async function searchNotesAction(input: unknown) {
+  const user = await getAuthedUser();
+  const { query } = searchNotesSchema.parse(input);
+  return notes.searchNoteContents(user.id, query);
 }

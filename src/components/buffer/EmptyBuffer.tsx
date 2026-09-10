@@ -1,6 +1,6 @@
 "use client";
 
-import { useCreateNote } from "@/lib/notes-query";
+import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 
 /**
  * No screen in Stitch shows a zero-notes state, so this is derived strictly
@@ -8,7 +8,7 @@ import { useCreateNote } from "@/lib/notes-query";
  * marks unused space past EOF in every editor screenshot.
  */
 export function EmptyBuffer() {
-  const createNote = useCreateNote();
+  const { createAndOpenNote } = useWorkspace();
 
   return (
     <div className="w-full px-space-8 pt-space-8">
@@ -16,7 +16,7 @@ export function EmptyBuffer() {
         <div className="flex-1 py-space-4 px-space-6 font-code-editor text-code-editor leading-[1.75rem]">
           <p className="text-on-surface-variant">No buffer open.</p>
           <button
-            onClick={createNote}
+            onClick={createAndOpenNote}
             className="mt-space-2 text-primary hover:underline"
           >
             :new — create your first buffer [^N]

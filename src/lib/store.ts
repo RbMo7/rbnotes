@@ -17,6 +17,14 @@ type WorkspaceState = {
   saveState: SaveState;
   setSaveState: (state: SaveState) => void;
 
+  // Which notes currently hold unsaved local edits, keyed by noteId --
+  // shared between autosave (the sole writer) and the warm-up loop, which
+  // must never fetch-and-overwrite a buffer the user is actively editing.
+  // A plain object (not a Set) so it round-trips through Zustand's default
+  // equality-by-reference the same way every other field here does.
+  dirtyNoteIds: Record<string, true>;
+  setNoteDirty: (noteId: string, dirty: boolean) => void;
+
   // The active buffer registers its write here, so the shell's global
   // Ctrl+S (which lives above the per-route page tree) can reach the one
   // editor that is actually mounted. Null outside a note buffer.
@@ -44,7 +52,7 @@ type WorkspaceState = {
   setSearchOpen: (open: boolean) => void;
 
   // One-shot handoff from a global-search result click to the note buffer
-  // it navigates to: BufferWorkspace reads and clears this once on mount
+  // it navigates to: WorkspaceBuffer reads and clears this once on mount
   // (see SettingsHydrator for the same "consume the initial value once"
   // pattern) so the editor can select the matched text instead of just
   // opening the note at whatever the cursor last was.
@@ -86,6 +94,19 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   saveState: "clean",
   setSaveState: (saveState) => set({ saveState }),
 
+  dirtyNoteIds: {},
+  setNoteDirty: (noteId, dirty) =>
+    set((s) => {
+      if (dirty) {
+        if (s.dirtyNoteIds[noteId]) return s;
+        return { dirtyNoteIds: { ...s.dirtyNoteIds, [noteId]: true } };
+      }
+      if (!s.dirtyNoteIds[noteId]) return s;
+      const rest = { ...s.dirtyNoteIds };
+      delete rest[noteId];
+      return { dirtyNoteIds: rest };
+    }),
+
   saveActive: null,
   registerActiveSave: (saveActive) => set({ saveActive }),
 
@@ -119,3 +140,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setSettings: (settings) => set({ settings }),
   updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
 }));
+
+/**
+ * An imperative (non-subscribing) read of dirtyNoteIds, for the two callers
+ * that need "is this note dirty right now" as a plain predicate rather than
+ * a reactive hook value: warm-up (must never fetch-and-overwrite a buffer
+ * mid-edit) and cold-open (must never jump the queue for one either).
+ */
+export function isNoteDirty(noteId: string): boolean {
+  return !!useWorkspaceStore.getState().dirtyNoteIds[noteId];
+}

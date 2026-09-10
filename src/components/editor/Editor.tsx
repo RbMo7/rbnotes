@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { EditorState, Compartment } from "@codemirror/state";
+import { EditorState, EditorSelection, Compartment, type Extension } from "@codemirror/state";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { searchKeymap } from "@codemirror/search";
@@ -23,6 +23,8 @@ import type { Settings } from "@/lib/schemas";
 export type EditorHandle = {
   focus: () => void;
   getContent: () => string;
+  /** Any note's cached document, active or in the background -- null if this session never opened it. Autosave uses this to flush a buffer the user has already switched away from. */
+  getContentFor: (noteId: string) => string | null;
   /** Replace the document's first H1 line with `# title`, or prepend one. */
   replaceFirstH1: (title: string) => void;
   /** Run a genuine Vim ex command; returns false if the engine rejected it. */
@@ -30,15 +32,27 @@ export type EditorHandle = {
 };
 
 type Props = {
-  initialContent: string;
+  /** Which document is active. Switching this swaps the mounted view's document instead of remounting -- see the module doc below. */
+  noteId: string;
+  /**
+   * Undefined means "not warmed yet". Editor stays mounted regardless (so
+   * its per-note document cache survives passing through a cold buffer) --
+   * it simply won't create or switch to a state for `noteId` until this
+   * becomes a real string. The caller overlays a skeleton in the meantime
+   * (see WorkspaceBuffer) rather than Editor showing anything of its own,
+   * since showing an empty document here would be exactly the
+   * cold-look-like-empty bug the absent/present distinction exists to
+   * prevent.
+   */
+  content: string | undefined;
   // Set only when arriving from a global-search result click: the first
-  // case-insensitive occurrence of this text in `initialContent` is
-  // selected and scrolled into view once, on mount.
-  initialSearchQuery?: string | null;
+  // case-insensitive occurrence of this text in the *active* document is
+  // selected and scrolled into view once, whenever it's non-null.
+  pendingMatch?: string | null;
   settings: Settings;
   vimEnabled: boolean;
   readOnly?: boolean;
-  onChange?: () => void;
+  onChange?: (noteId: string) => void;
   // The only bridge from the editor to app actions. Read-only callers (the
   // shared-note view) simply omit it -- no no-op callback wall.
   onIntent?: (intent: Intent) => void;
@@ -51,10 +65,27 @@ function mapVimMode(raw: string | undefined): VimMode {
   return "NORMAL";
 }
 
+/**
+ * One CodeMirror view for the whole session: switching `noteId` swaps which
+ * cached EditorState the single mounted EditorView shows (`view.setState`)
+ * instead of tearing the view down and creating a new one. Each note's
+ * EditorState is created once (on first activation) and kept forever in
+ * `statesRef`, which is what makes cursor, selection, and undo history
+ * survive a switch away and back -- CodeMirror's undo history lives inside
+ * the EditorState object itself, not in the view, so the only way to keep
+ * it is to keep reusing the exact same state object.
+ *
+ * The view is genuinely recreated only when `vimEnabled`/`readOnly` change
+ * (a desktop<->mobile breakpoint flip, or a read-only shared view) --
+ * accepted as the one case that loses every buffer's cached state, since
+ * doing otherwise would mean compartmentalizing vim on/off per note, which
+ * no user story asks for.
+ */
 export const Editor = forwardRef<EditorHandle, Props>(function Editor(
   {
-    initialContent,
-    initialSearchQuery,
+    noteId,
+    content,
+    pendingMatch,
     settings,
     vimEnabled,
     readOnly = false,
@@ -72,6 +103,24 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
   const gutterCompartment = useRef(new Compartment()).current;
   const wrapCompartment = useRef(new Compartment()).current;
   const tabSizeCompartment = useRef(new Compartment()).current;
+
+  // Per-note document cache (undo/selection live inside each EditorState)
+  // and per-note scroll position (CodeMirror doesn't persist scroll in
+  // state, so it's tracked alongside, restored on activation).
+  const statesRef = useRef(new Map<string, EditorState>());
+  const scrollRef = useRef(new Map<string, number>());
+  const activeIdRef = useRef<string | null>(null);
+  const sharedExtensionsRef = useRef<Extension[] | null>(null);
+  const generationRef = useRef<string | null>(null);
+  // Text + cursor carried across a vimEnabled/readOnly regeneration (a
+  // desktop<->mobile breakpoint flip) -- every cached EditorState is
+  // discarded then (a different vim() extension instance means CM6 can't
+  // reuse them), but the *documents themselves* must survive: losing undo
+  // history there is an accepted, narrow tradeoff, losing unsaved text
+  // outright is real data loss and isn't. Read once by the activation
+  // effect the first time each note reactivates post-regeneration, then
+  // discarded.
+  const carryoverRef = useRef(new Map<string, { doc: string; selection: EditorSelection }>());
 
   // Stable across renders so the listeners always call the latest callbacks
   // without needing to recreate the whole EditorView.
@@ -119,6 +168,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     () => ({
       focus: () => viewRef.current?.focus(),
       getContent: () => viewRef.current?.state.doc.toString() ?? "",
+      getContentFor: (id: string) => statesRef.current.get(id)?.doc.toString() ?? null,
       replaceFirstH1,
       execVimEx,
     }),
@@ -127,12 +177,30 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
 
   const [ready, setReady] = useState(false);
 
+  // The view lifecycle: created exactly once per vimEnabled/readOnly
+  // generation, and torn down only when that generation changes or the
+  // component unmounts -- never on a note switch, and never merely because
+  // the *active* note happens to be cold (content undefined). It's seeded
+  // with an empty, unkeyed placeholder document rather than waiting for
+  // real content: that placeholder is never written into `statesRef` under
+  // any noteId, so it can never be mistaken for a real (and possibly
+  // dirty) buffer's cache, and the caller keeps it hidden behind a skeleton
+  // until the activation effect below swaps in real content. Deliberately
+  // depends on nothing but the generation key -- earlier versions of this
+  // effect also depended on content's defined-ness, which meant switching
+  // *to* a cold note tore the whole view down (destroying every other
+  // buffer's cached undo history along with it) exactly because a changed
+  // dependency always re-runs the previous effect's cleanup, regardless of
+  // what the new invocation's body would have done.
   useEffect(() => {
     if (!containerRef.current) return;
+    const generation = `${vimEnabled}:${readOnly}`;
+    generationRef.current = generation;
+
     const initialMode: VimMode = readOnly ? "RO" : vimEnabled ? "NORMAL" : "EDIT";
 
     const updateListener = EditorView.updateListener.of((update) => {
-      if (update.docChanged) onChangeRef.current?.();
+      if (update.docChanged && activeIdRef.current) onChangeRef.current?.(activeIdRef.current);
       if (update.docChanged || update.selectionSet) {
         const pos = update.state.selection.main.head;
         const line = update.state.doc.lineAt(pos);
@@ -140,7 +208,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       }
     });
 
-    const extensions = [
+    const extensions: Extension[] = [
       history(),
       // @replit/codemirror-vim's vim() extension explicitly hides the
       // browser's native selection rendering (it expects a custom-drawn
@@ -159,39 +227,25 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       keymap.of([indentWithTab, ...historyKeymap, ...searchKeymap, ...defaultKeymap]),
     ];
 
+    // Created once per view generation and reused identically for every
+    // note's EditorState -- CodeMirror only keeps a ViewPlugin's instance
+    // (and with it, @replit/codemirror-vim's registers/marks, which are
+    // meant to be global across buffers just like real Vim) alive across a
+    // setState swap when the same extension value is present in both
+    // states.
     if (vimEnabled && !readOnly) {
       extensions.unshift(vim({ status: false }));
     }
+    sharedExtensionsRef.current = extensions;
 
-    const state = EditorState.create({ doc: initialContent, extensions });
+    // An unkeyed placeholder -- never stored in statesRef, never shown
+    // unhidden (see the module doc above). The activation effect swaps in
+    // the real document for `noteId` the moment `content` is available,
+    // which for a warm first note happens in the very same commit.
+    const state = EditorState.create({ doc: "", extensions });
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
     setReady(true);
-
-    // Arrived here from a global-search result click: select the first
-    // occurrence of the query so the click actually lands on the matched
-    // text instead of just opening the note at wherever the cursor last
-    // was. Runs regardless of vimEnabled (a mobile/touch user can search
-    // and click a result too) -- only readOnly is excluded, since a shared
-    // view has no search entry point to arrive from in the first place.
-    if (initialSearchQuery && !readOnly) {
-      const idx = initialContent.toLowerCase().indexOf(initialSearchQuery.toLowerCase());
-      if (idx !== -1) {
-        view.dispatch({
-          selection: { anchor: idx, head: idx + initialSearchQuery.length },
-          scrollIntoView: true,
-        });
-      }
-    }
-
-    // Opening a note (including a brand-new one from :new) should be
-    // typeable immediately -- no click into the canvas first. Skipped on
-    // mobile/no-vim (focusing there pops the OS keyboard just from
-    // switching notes to read, not because you meant to type) and for a
-    // read-only shared view (nothing to type into).
-    if (vimEnabled && !readOnly) {
-      view.focus();
-    }
 
     const cm = vimEnabled && !readOnly ? getCM(view) : null;
 
@@ -237,15 +291,118 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     view.dom.addEventListener("keydown", handleCapture, true);
 
     return () => {
+      // Runs automatically -- before React invokes this effect's *next*
+      // body (vimEnabled/readOnly changed) or on unmount -- which is why
+      // the capture has to happen here rather than at the top of the body
+      // above: by the time a new invocation starts, React has already run
+      // this same cleanup and `view` is already destroyed. Every open
+      // note's live text and cursor (including the active one's edits
+      // since its last capture -- dispatch() updates view.state without
+      // touching statesRef) are preserved in carryoverRef so a
+      // regeneration never loses unsaved work, only the ability to undo
+      // past this point.
+      /* eslint-disable react-hooks/exhaustive-deps -- statesRef/carryoverRef/scrollRef are stable Map identities (never reassigned, only mutated), not DOM-node refs the "may have changed by cleanup time" warning is meant for; reading them live at cleanup time is the intended behavior. */
+      if (activeIdRef.current) {
+        statesRef.current.set(activeIdRef.current, view.state);
+      }
+      for (const [id, s] of statesRef.current) {
+        carryoverRef.current.set(id, { doc: s.doc.toString(), selection: s.selection });
+      }
+      statesRef.current.clear();
+      scrollRef.current.clear();
+      /* eslint-enable react-hooks/exhaustive-deps */
+      activeIdRef.current = null;
+
       view.dom.removeEventListener("keydown", handleCapture, true);
       view.destroy();
-      viewRef.current = null;
+      if (viewRef.current === view) viewRef.current = null;
     };
-    // Extensions/compartments are intentionally created once per mount;
-    // settings changes are applied via the effect below instead of
-    // recreating the whole view (which would drop selection/undo history).
+    // Extensions/compartments are intentionally created once per view
+    // generation; settings changes are applied via the effect below instead
+    // of recreating the whole view (which would drop selection/undo
+    // history). Deliberately depends on nothing but the generation key --
+    // see the module doc above for why `content`/`noteId` must not be
+    // dependencies here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readOnly, vimEnabled]);
+
+  // The switch path: reuses the one mounted view, swapping in the target
+  // note's cached document (creating it on first activation, for the very
+  // first note included) instead of remounting anything.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !ready) return;
+    if (activeIdRef.current === noteId && (content === undefined || statesRef.current.has(noteId))) {
+      return;
+    }
+
+    // Whatever the view currently shows is about to stop being on screen --
+    // capture its *live* state (not the stale object stored at creation
+    // time: every dispatch() since then updated view.state in place
+    // without touching this map) so switching back later restores edits,
+    // cursor, and undo history exactly. Applies even when leaving *to* a
+    // cold note (see below).
+    if (activeIdRef.current) {
+      statesRef.current.set(activeIdRef.current, view.state);
+      scrollRef.current.set(activeIdRef.current, view.scrollDOM.scrollTop);
+    }
+
+    if (content === undefined) {
+      // Cold: there is nothing to switch *to* yet. Swap to a neutral,
+      // unkeyed blank placeholder rather than leaving the outgoing note's
+      // real document mounted and fully editable underneath the caller's
+      // skeleton overlay -- otherwise a stray keystroke landing in a
+      // merely visibility:hidden buffer would silently edit the *wrong*
+      // note (this placeholder is never written into statesRef under any
+      // id, and activeIdRef becomes null, so the updateListener's onChange
+      // has nothing to attribute a stray edit to even if focus lingers).
+      view.setState(EditorState.create({ doc: "", extensions: sharedExtensionsRef.current ?? [] }));
+      activeIdRef.current = null;
+      view.contentDOM.blur();
+      return;
+    }
+
+    let state = statesRef.current.get(noteId);
+    if (!state) {
+      const carried = carryoverRef.current.get(noteId);
+      state = EditorState.create({
+        doc: carried?.doc ?? content,
+        selection: carried?.selection,
+        extensions: sharedExtensionsRef.current ?? [],
+      });
+      carryoverRef.current.delete(noteId);
+      statesRef.current.set(noteId, state);
+    }
+    view.setState(state);
+    activeIdRef.current = noteId;
+    view.scrollDOM.scrollTop = scrollRef.current.get(noteId) ?? 0;
+
+    if (vimEnabled && !readOnly) view.focus();
+    // vimEnabled/readOnly are genuine dependencies, not just read inside:
+    // when they change, the view-lifecycle effect above regenerates
+    // viewRef.current from scratch (a fresh, still-blank placeholder) --
+    // without them here too, this effect would keep comparing against its
+    // *last* noteId/content and, finding neither changed, never re-run to
+    // populate the new view at all.
+  }, [noteId, content, ready, vimEnabled, readOnly]);
+
+  // Arrived at the active buffer from a global-search result click: select
+  // the first occurrence of the query. Independent of the switch effect
+  // above so it still fires even if the match arrives a render later (the
+  // caller clears the store's one-shot handoff itself).
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !pendingMatch || readOnly) return;
+    const text = view.state.doc.toString();
+    const idx = text.toLowerCase().indexOf(pendingMatch.toLowerCase());
+    if (idx !== -1) {
+      view.dispatch({
+        selection: { anchor: idx, head: idx + pendingMatch.length },
+        scrollIntoView: true,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingMatch]);
 
   // Apply live settings changes (from the Settings page or `:set`) without
   // recreating the editor.

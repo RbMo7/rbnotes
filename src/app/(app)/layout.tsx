@@ -1,6 +1,6 @@
 import { QueryClient, dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { getAuthedUser } from "@/lib/auth";
-import { listAllNotesFull } from "@/lib/notes";
+import { listAllNotesMeta } from "@/lib/notes";
 import { settingsSchema, defaultSettings } from "@/lib/schemas";
 // Imported from note-types, not notes-query -- notes-query.ts is a "use
 // client" module, and a Server Component importing a plain constant from
@@ -10,21 +10,21 @@ import { settingsSchema, defaultSettings } from "@/lib/schemas";
 import { notesQueryKey } from "@/lib/note-types";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { SettingsHydrator } from "@/components/shell/SettingsHydrator";
-import { Sidebar } from "@/components/shell/Sidebar";
-import { AppShell } from "@/components/shell/AppShell";
+import { WorkspaceProvider } from "@/components/workspace/WorkspaceProvider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getAuthedUser();
 
-  // The one real fetch the whole app is built on: every note, full
-  // content, once. Prefetched here (server-side, scoped to this user) and
-  // handed to the client as already-hydrated query cache -- everything
-  // downstream (sidebar, editor, tags, graph, search) reads this same
-  // cache and never re-fetches per click. See lib/notes-query.ts.
+  // First paint blocks on this and only this: every note's metadata, no
+  // content. Prefetched here (server-side, scoped to this user) and handed
+  // to the client as already-hydrated query cache -- the sidebar orients
+  // instantly from it, and each note's content warms in separately (on
+  // open, or via the background warm-up loop) once the shell has mounted.
+  // See lib/notes-query.ts.
   const queryClient = new QueryClient();
   await queryClient.prefetchQuery({
     queryKey: notesQueryKey,
-    queryFn: () => listAllNotesFull(user.id),
+    queryFn: () => listAllNotesMeta(user.id),
   });
 
   const parsedSettings = settingsSchema.safeParse(user.settings);
@@ -35,8 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <QueryProvider>
         <HydrationBoundary state={dehydrate(queryClient)}>
           <SettingsHydrator settings={settings} />
-          <Sidebar />
-          <AppShell email={user.email}>{children}</AppShell>
+          <WorkspaceProvider email={user.email}>{children}</WorkspaceProvider>
         </HydrationBoundary>
       </QueryProvider>
     </div>

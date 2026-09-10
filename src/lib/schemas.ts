@@ -48,7 +48,6 @@ export const resetPasswordSchema = z
 export const updateNoteContentSchema = z.object({
   noteId: z.uuid(),
   content: z.string().max(1_000_000),
-  clientRevision: z.number().int().nonnegative(),
 });
 
 export const noteIdSchema = z.object({
@@ -59,6 +58,10 @@ export const setNoteFlagSchema = z.object({
   noteId: z.uuid(),
   pinned: z.boolean().optional(),
   archived: z.boolean().optional(),
+});
+
+export const searchNotesSchema = z.object({
+  query: z.string().min(1).max(200),
 });
 
 // --- Settings ---------------------------------------------------------------

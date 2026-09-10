@@ -17,7 +17,7 @@ export function useIsDesktop() {
     // Deliberate: the initial read has to happen post-mount (matchMedia
     // isn't available during SSR), and the `null` default until then is
     // what lets callers avoid a flash of the wrong Vim keymap -- see
-    // BufferWorkspace's `isDesktop === null` guard.
+    // WorkspaceBuffer's `isDesktop === null` guard.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsDesktop(mql.matches);
     const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);

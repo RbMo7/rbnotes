@@ -2,13 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { ChevronDown, ChevronRight, Search, Settings } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
 import { groupNotes } from "@/lib/grouping";
 import { NoteListItem } from "@/components/shell/NoteListItem";
-import { useNotesQuery, useCreateNote } from "@/lib/notes-query";
+import { useNotesQuery } from "@/lib/notes-query";
+import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 
 export function Sidebar() {
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);
@@ -16,44 +17,20 @@ export function Sidebar() {
   const setMobileOpen = useWorkspaceStore((s) => s.setMobileSidebarOpen);
   const setSearchOpen = useWorkspaceStore((s) => s.setSearchOpen);
   const { data: notes = [] } = useNotesQuery();
-  // Content is already fully loaded client-side (see lib/notes-query.ts),
-  // so grouping/sorting here is a pure in-memory computation -- the same
+  // Metadata is already loaded client-side (see lib/notes-query.ts), so
+  // grouping/sorting here is a pure in-memory computation -- the same
   // reason tags and graph don't fetch anything on click either.
   const groups = groupNotes(
     notes.map((n) => ({ ...n, updatedAt: new Date(n.updatedAt) })),
   );
   const pathname = usePathname();
-  const router = useRouter();
-  const createNote = useCreateNote();
+  const { createAndOpenNote } = useWorkspace();
   const [archiveOpen, setArchiveOpen] = useState(false);
 
   const handleNewNote = () => {
-    createNote();
+    createAndOpenNote();
     setMobileOpen(false);
   };
-
-  // Every note's content already lives in the client cache -- the only
-  // thing still standing between a sidebar click and an instant switch is
-  // Next's own route segment, which it won't fetch ahead of time for a
-  // dynamic page without this. Staggered (not Promise.all) so opening a
-  // notebook with hundreds of notes doesn't fire them all in one burst.
-  // Note: Next only prefetches in production builds -- this has no visible
-  // effect under `next dev`.
-  useEffect(() => {
-    let cancelled = false;
-    const ids = notes.map((n) => n.id);
-    let i = 0;
-    function prefetchNext() {
-      if (cancelled || i >= ids.length) return;
-      router.prefetch(`/notes/${ids[i]}`);
-      i++;
-      setTimeout(prefetchNext, 75);
-    }
-    prefetchNext();
-    return () => {
-      cancelled = true;
-    };
-  }, [notes, router]);
 
   return (
     <>

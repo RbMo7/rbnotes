@@ -1,5 +1,5 @@
 import { extractTags } from "@/lib/tags";
-import type { FullNote } from "@/lib/note-types";
+import type { NoteRecord } from "@/lib/note-types";
 
 // [[Note Title]] wiki-links, resolved by case-insensitive title match.
 const LINK_PATTERN = /\[\[([^\]]+)\]\]/g;
@@ -10,10 +10,13 @@ export type GraphEdge = { source: string; target: string; kind: "link" | "tag" }
 /**
  * Pure and isomorphic -- no DB query. The GRAPH page runs this over the
  * already-loaded notes-query cache client-side (same reasoning as
- * lib/tags.ts's computeTagSummaries), so opening it is instant.
+ * lib/tags.ts's computeTagSummaries), so opening it is instant. A note
+ * whose content hasn't warmed yet (see lib/notes-query.ts) simply
+ * contributes no links/tags until it does -- the graph fills in as warm-up
+ * progresses rather than blocking on it.
  */
 export function buildNoteGraph(
-  allNotes: Pick<FullNote, "id" | "title" | "content" | "archived">[],
+  allNotes: Pick<NoteRecord, "id" | "title" | "content" | "archived">[],
 ): { nodes: GraphNode[]; edges: GraphEdge[] } {
   const notes = allNotes.filter((n) => !n.archived);
   const byTitle = new Map(notes.map((n) => [n.title.toLowerCase(), n.id]));
@@ -30,7 +33,7 @@ export function buildNoteGraph(
   };
 
   for (const note of notes) {
-    for (const match of note.content.matchAll(LINK_PATTERN)) {
+    for (const match of (note.content ?? "").matchAll(LINK_PATTERN)) {
       const targetId = byTitle.get(match[1].trim().toLowerCase());
       if (targetId) addEdge(note.id, targetId, "link");
     }
@@ -38,7 +41,7 @@ export function buildNoteGraph(
 
   const byTag = new Map<string, string[]>();
   for (const note of notes) {
-    for (const tag of extractTags(note.content)) {
+    for (const tag of extractTags(note.content ?? "")) {
       const list = byTag.get(tag) ?? [];
       list.push(note.id);
       byTag.set(tag, list);

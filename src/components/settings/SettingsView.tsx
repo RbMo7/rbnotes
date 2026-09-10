@@ -31,7 +31,7 @@ function SettingRow({
 }
 
 export function SettingsView({ email }: { email: string }) {
-  // Shared with every open note editor (BufferWorkspace) -- changing a
+  // Shared with every open note editor (WorkspaceBuffer) -- changing a
   // setting here is reflected there immediately, and vice versa, since
   // both read the exact same store instead of independently-fetched
   // copies of the same data.

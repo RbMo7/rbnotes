@@ -8,7 +8,7 @@ export async function saveSettingsAction(input: unknown) {
   const user = await getAuthedUser();
   const settings = settingsSchema.parse(input);
   await db.profile.update({ where: { id: user.id }, data: { settings } });
-  // No revalidatePath: both SettingsView and BufferWorkspace already hold
+  // No revalidatePath: both SettingsView and WorkspaceBuffer already hold
   // their own optimistic client-side settings state, so revalidating just
   // forced an unnecessary refetch/re-render of the whole app shell on
   // every settings change. The next fresh page load naturally picks up

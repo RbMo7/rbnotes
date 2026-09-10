@@ -9,7 +9,7 @@ vi.mock("@/server/actions/notes", () => ({
   saveNoteContentAction: mocks.saveNoteContentAction,
 }));
 
-import { useManualSave } from "@/components/editor/use-manual-save";
+import { useAutosave } from "@/components/workspace/useAutosave";
 import {
   dispatchCommand,
   type CommandContext,
@@ -23,15 +23,28 @@ function saveState() {
 }
 
 /**
- * Integration across the command seam: a real `useManualSave` behind the
- * command context, driven by the actual `:w` dispatch. This asserts the
- * save-state lifecycle at the same interface the command suite uses.
+ * Integration across the command seam: the real useAutosave engine behind
+ * the command context, driven by the actual `:w` dispatch. This asserts
+ * the save-state lifecycle at the same interface the command suite uses --
+ * unchanged by the move from manual-only save to autosave-with-force-flush,
+ * since `:w` still resolves to the exact same `flush` path a debounced
+ * autosave would have used.
  */
 function renderCommandHarness() {
   return renderHook(() => {
-    const { write, markDirty, isDirty } = useManualSave("note-1", () => "content", () => {});
+    const { markDirty, flush, isDirty } = useAutosave({
+      getContentFor: () => "content",
+      activeNoteId: "note-1",
+      onSaved: () => {},
+    });
     const ctx: CommandContext = {
-      note: { save: write, isDirty, create: () => {}, rename: () => {}, delete: () => {} },
+      note: {
+        save: () => flush("note-1"),
+        isDirty: () => isDirty("note-1"),
+        create: () => {},
+        rename: () => {},
+        delete: () => {},
+      },
       workspace: {
         notify: () => {},
         openHelp: () => {},
@@ -43,14 +56,14 @@ function renderCommandHarness() {
         updateSettings: () => {},
       },
     };
-    return { markDirty, ctx };
+    return { markDirty: () => markDirty("note-1"), ctx };
   });
 }
 
 describe("save-state transitions at the command seam", () => {
   beforeEach(() => {
     mocks.saveNoteContentAction.mockReset();
-    useWorkspaceStore.setState({ saveState: "clean" });
+    useWorkspaceStore.setState({ saveState: "clean", dirtyNoteIds: {} });
   });
 
   it(":w drives clean -> saving -> clean", async () => {

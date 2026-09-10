@@ -3,12 +3,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { notesQueryKey, type FullNote } from "@/lib/note-types";
+import { notesQueryKey, type NoteRecord } from "@/lib/note-types";
 
 const mocks = vi.hoisted(() => ({
   setNoteFlagsAction: vi.fn(async () => {}),
   deleteNoteAction: vi.fn(async () => {}),
-  push: vi.fn(),
+  goHome: vi.fn(),
+  createAndOpenNote: vi.fn(),
 }));
 
 vi.mock("@/server/actions/notes", () => ({
@@ -16,13 +17,18 @@ vi.mock("@/server/actions/notes", () => ({
   deleteNoteAction: mocks.deleteNoteAction,
 }));
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mocks.push }),
+vi.mock("@/components/workspace/WorkspaceContext", () => ({
+  useWorkspace: () => ({
+    activeNoteId: note.id,
+    openNote: vi.fn(),
+    goHome: mocks.goHome,
+    createAndOpenNote: mocks.createAndOpenNote,
+  }),
 }));
 
 import { useNoteOperations } from "@/components/buffer/use-note-operations";
 
-const note: FullNote = {
+const note: NoteRecord = {
   id: "note-1",
   title: "Hello",
   content: "body",
@@ -34,7 +40,7 @@ const note: FullNote = {
 
 function setup(content: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  queryClient.setQueryData<FullNote[]>(notesQueryKey, [note]);
+  queryClient.setQueryData<NoteRecord[]>(notesQueryKey, [note]);
   const notify = vi.fn();
 
   const wrapper = ({ children }: { children: ReactNode }) => (
@@ -58,7 +64,8 @@ describe("useNoteOperations", () => {
   beforeEach(() => {
     mocks.setNoteFlagsAction.mockClear();
     mocks.deleteNoteAction.mockClear();
-    mocks.push.mockClear();
+    mocks.goHome.mockClear();
+    mocks.createAndOpenNote.mockClear();
   });
 
   it("archives a non-empty buffer and persists the flag in the background", () => {
@@ -68,11 +75,11 @@ describe("useNoteOperations", () => {
       result.current.delete(false);
     });
 
-    const cached = queryClient.getQueryData<FullNote[]>(notesQueryKey);
+    const cached = queryClient.getQueryData<NoteRecord[]>(notesQueryKey);
     expect(cached?.[0].archived).toBe(true);
     expect(mocks.setNoteFlagsAction).toHaveBeenCalledWith({ noteId: note.id, archived: true });
     expect(mocks.deleteNoteAction).not.toHaveBeenCalled();
-    expect(mocks.push).toHaveBeenCalledWith("/notes");
+    expect(mocks.goHome).toHaveBeenCalledOnce();
   });
 
   it("really deletes an empty buffer instead of archiving it", () => {
@@ -82,7 +89,7 @@ describe("useNoteOperations", () => {
       result.current.delete(false);
     });
 
-    expect(queryClient.getQueryData<FullNote[]>(notesQueryKey)).toEqual([]);
+    expect(queryClient.getQueryData<NoteRecord[]>(notesQueryKey)).toEqual([]);
     expect(mocks.deleteNoteAction).toHaveBeenCalledWith({ noteId: note.id });
     expect(mocks.setNoteFlagsAction).not.toHaveBeenCalled();
   });
@@ -94,7 +101,7 @@ describe("useNoteOperations", () => {
       result.current.delete(true);
     });
 
-    expect(queryClient.getQueryData<FullNote[]>(notesQueryKey)).toEqual([]);
+    expect(queryClient.getQueryData<NoteRecord[]>(notesQueryKey)).toEqual([]);
     expect(mocks.deleteNoteAction).toHaveBeenCalledWith({ noteId: note.id });
   });
 
@@ -105,8 +112,16 @@ describe("useNoteOperations", () => {
       result.current.rename("Renamed");
     });
 
-    const cached = queryClient.getQueryData<FullNote[]>(notesQueryKey);
+    const cached = queryClient.getQueryData<NoteRecord[]>(notesQueryKey);
     expect(cached?.[0].title).toBe("Renamed");
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("renamed.md"));
+  });
+
+  it("create delegates straight to the workspace's createAndOpenNote", () => {
+    const { result } = setup("body");
+    act(() => {
+      result.current.create();
+    });
+    expect(mocks.createAndOpenNote).toHaveBeenCalledOnce();
   });
 });

@@ -2,12 +2,12 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { FileText, Archive } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
 import { displayFilename } from "@/lib/format";
 import { formatSidebarTimestamp } from "@/lib/grouping";
 import { useNotesQuery } from "@/lib/notes-query";
+import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 
 /**
  * Ctrl+P. Per the design system spec: centered at 20% viewport height,
@@ -19,7 +19,7 @@ export function QuickSwitcher() {
   const open = useWorkspaceStore((s) => s.quickSwitcherOpen);
   const setOpen = useWorkspaceStore((s) => s.setQuickSwitcherOpen);
   const { data: notes = [] } = useNotesQuery();
-  const router = useRouter();
+  const { openNote: switchToNote } = useWorkspace();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -32,7 +32,7 @@ export function QuickSwitcher() {
   const openNote = (id: string) => {
     setOpen(false);
     setQuery("");
-    router.push(`/notes/${id}`);
+    switchToNote(id);
   };
 
   return (

@@ -1,15 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { BufferHeaderNormal } from "@/components/buffer/BufferHeaderNormal";
 import { VimStatuslineDock } from "@/components/buffer/VimStatuslineDock";
 import { QuickActionsStrip } from "@/components/buffer/QuickActionsStrip";
 import { CommandDock } from "@/components/buffer/CommandDock";
 import { HelpBuffer } from "@/components/overlay/HelpBuffer";
+import { EmptyBuffer } from "@/components/buffer/EmptyBuffer";
 import { InspectorPanel, type ShareViewer } from "@/components/inspect/InspectorPanel";
 import { StatusToast } from "@/components/auth/StatusToast";
+import { SaveRetryToast } from "@/components/workspace/SaveRetryToast";
+import { BufferSkeleton } from "@/components/workspace/BufferSkeleton";
 import {
   dispatchCommand,
   type CommandContext,
@@ -18,41 +21,38 @@ import {
 } from "@/components/editor/command-dispatch";
 import { dispatchIntent, type Intent } from "@/components/editor/shortcuts";
 import { useIntentHandlers } from "@/components/editor/use-intent-handlers";
-import { useManualSave } from "@/components/editor/use-manual-save";
+import { useAutosave } from "@/components/workspace/useAutosave";
 import { useNoteOperations } from "@/components/buffer/use-note-operations";
-import { useWorkspaceStore } from "@/lib/store";
+import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { useWorkspaceStore, isNoteDirty } from "@/lib/store";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { displayFilename } from "@/lib/format";
-import { useNotesQuery, useNotesMutations, computeBufferNumber } from "@/lib/notes-query";
+import {
+  useNotesQuery,
+  useNotesMutations,
+  computeBufferNumber,
+  warmNoteContent,
+} from "@/lib/notes-query";
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
 import { saveSettingsAction } from "@/server/actions/settings";
 import type { Settings } from "@/lib/schemas";
 
-export function BufferWorkspace({ noteId }: { noteId: string }) {
-  const router = useRouter();
+/**
+ * The persistent buffer chrome: mounted once by WorkspaceProvider whenever
+ * the URL is inside `/notes*`, never remounted on a note-to-note switch
+ * (that's the whole point -- see ADR-0001). Everything that used to reset
+ * "for free" via remount (helpOpen, share panel state, the inspector) is
+ * reset explicitly here instead, keyed on `activeNoteId`.
+ */
+export function WorkspaceBuffer() {
+  const { activeNoteId, goHome } = useWorkspace();
   const editorRef = useRef<EditorHandle>(null);
   const isDesktop = useIsDesktop();
-
-  // Read-and-clear once per mount, same pattern as SettingsHydrator's
-  // lazy initializer: a search result click stashes {noteId, query} here
-  // right before navigating (see SearchPalette.tsx), and this is the one
-  // place that's allowed to consume it. Reading via getState() instead of
-  // the hook deliberately doesn't subscribe -- a later change to this
-  // store field (e.g. a different note's click) must not re-run this.
-  const [initialSearchQuery] = useState(() => {
-    const pending = useWorkspaceStore.getState().pendingSearchMatch;
-    if (pending?.noteId !== noteId) return null;
-    useWorkspaceStore.getState().setPendingSearchMatch(null);
-    return pending.query;
-  });
+  const queryClient = useQueryClient();
 
   const { data: notes } = useNotesQuery();
   const { updateNote } = useNotesMutations();
-  // Both scoped to this user at the one fetch that populated the cache
-  // (see (app)/layout.tsx) -- a note that doesn't exist, or belongs to
-  // someone else, simply isn't in `notes` either way. See "not found"
-  // handling below.
-  const note = notes?.find((n) => n.id === noteId);
+  const note = activeNoteId ? notes?.find((n) => n.id === activeNoteId) : undefined;
 
   const settings = useWorkspaceStore((s) => s.settings);
   const setSettingsStore = useWorkspaceStore((s) => s.updateSettings);
@@ -62,6 +62,7 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [shareViewers, setShareViewers] = useState<ShareViewer[]>([]);
   const [shareLoading, setShareLoading] = useState(false);
+  const [pendingQuery, setPendingQuery] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const mode = useWorkspaceStore((s) => s.mode);
@@ -72,6 +73,7 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   const setInspectorOpen = useWorkspaceStore((s) => s.setInspectorOpen);
   const toggleInspector = useWorkspaceStore((s) => s.toggleInspector);
   const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);
+  const saveState = useWorkspaceStore((s) => s.saveState);
 
   // The editor's own listener produces intents; this is the one dispatcher
   // that turns them into effects -- the same handler set the shell uses.
@@ -81,16 +83,19 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
     [intentHandlers],
   );
 
-  // Per-note local state (helpOpen, shareToken, shareViewers) resets for
-  // free: the page renders `<BufferWorkspace key={noteId} .../>`, so React
-  // remounts this component fresh on every note switch. The note's own
-  // data (title, content) no longer lives in component state at all --
-  // it's read reactively from the notes-query cache above, so there's
-  // nothing to reset for that.
+  // Per-buffer local UI state resets on every switch -- there is no remount
+  // to do it for free anymore (see the module doc).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing local UI state to the active buffer changing, not derivable at render
+    setHelpOpen(false);
+    setInspectorOpen(false);
+    setShareToken(null);
+    setShareViewers([]);
+  }, [activeNoteId, setInspectorOpen]);
+
   useEffect(() => {
     setMode(isDesktop === false ? "EDIT" : "NORMAL");
-    setInspectorOpen(false);
-  }, [isDesktop, setMode, setInspectorOpen]);
+  }, [isDesktop, setMode]);
 
   useEffect(() => {
     if (!note) return;
@@ -98,16 +103,57 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
     return () => setActiveFilename(null);
   }, [note?.title, setActiveFilename]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const getContent = useCallback(() => editorRef.current?.getContent() ?? "", []);
-  const handleSaved = useCallback(
-    (info: { title: string; content: string; updatedAt: string }) => updateNote(noteId, info),
-    [noteId, updateNote],
-  );
-  const { markDirty, write, isDirty } = useManualSave(noteId, getContent, handleSaved);
+  // Cold-open: jump the warm-up queue for whichever buffer is active and
+  // still cold. warmNoteContent is idempotent (a no-op if already
+  // warm/dirty/in-flight), so this can't race the background warm-up loop.
+  useEffect(() => {
+    if (!activeNoteId || !note || note.content !== undefined) return;
+    void warmNoteContent(queryClient, activeNoteId, isNoteDirty);
+  }, [activeNoteId, note, queryClient]);
 
-  // Ctrl+S reaches whichever buffer is mounted through this registration --
-  // the shell listener lives above the per-route tree and can't call `write`
-  // directly.
+  // A global-search result click stashes {noteId, query} in the store right
+  // before switching (see SearchPalette.tsx); read-and-clear it once per
+  // activation, same "consume once" pattern SettingsHydrator uses for its
+  // initial value.
+  useEffect(() => {
+    const pending = useWorkspaceStore.getState().pendingSearchMatch;
+    if (pending?.noteId === activeNoteId) {
+      useWorkspaceStore.getState().setPendingSearchMatch(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot handoff consumed on activation, not derivable at render
+      setPendingQuery(pending.query);
+    } else {
+      setPendingQuery(null);
+    }
+  }, [activeNoteId]);
+
+  const getContent = useCallback(() => editorRef.current?.getContent() ?? "", []);
+  const getContentFor = useCallback(
+    (id: string) => editorRef.current?.getContentFor(id) ?? null,
+    [],
+  );
+  const handleSaved = useCallback(
+    (id: string, info: { title: string; content: string; updatedAt: string }) =>
+      updateNote(id, info),
+    [updateNote],
+  );
+  const { markDirty, flush, isDirty } = useAutosave({
+    getContentFor,
+    activeNoteId,
+    onSaved: handleSaved,
+  });
+  const handleChange = useCallback((id: string) => markDirty(id), [markDirty]);
+  const write = useCallback(
+    () => (activeNoteId ? flush(activeNoteId) : Promise.resolve(true)),
+    [activeNoteId, flush],
+  );
+  const activeIsDirty = useCallback(
+    () => (activeNoteId ? isDirty(activeNoteId) : false),
+    [activeNoteId, isDirty],
+  );
+
+  // Ctrl+S reaches whichever buffer is active through this registration --
+  // registered once (not per switch): it reads the current active id via
+  // `write`'s own closure over `activeNoteId` at call time.
   useEffect(() => {
     useWorkspaceStore.getState().registerActiveSave(() => {
       void write();
@@ -121,24 +167,22 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
     window.setTimeout(() => setNotify(null), 3500);
   }, []);
 
-  // Note operations (with the archive-vs-delete policy) live in their own
-  // module; this component just wires them into the command context,
-  // alongside the buffer's own save/isDirty.
   const noteOps = useNoteOperations({
-    noteId,
+    noteId: activeNoteId ?? "",
     getContent,
     notify: showNotify,
   });
 
   const loadShareInfo = useCallback(() => {
+    if (!activeNoteId) return;
     setShareLoading(true);
-    getShareInfoAction({ noteId })
+    getShareInfoAction({ noteId: activeNoteId })
       .then((info) => {
         setShareToken(info.share?.token ?? null);
         setShareViewers(info.viewers);
       })
       .finally(() => setShareLoading(false));
-  }, [noteId]);
+  }, [activeNoteId]);
 
   useEffect(() => {
     // Fetches and sets share info fresh each time the inspector opens.
@@ -147,24 +191,26 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   }, [inspectorOpen, loadShareInfo]);
 
   const handleShare = useCallback(() => {
+    if (!activeNoteId) return;
     startTransition(async () => {
-      const result = await createShareAction({ noteId });
+      const result = await createShareAction({ noteId: activeNoteId });
       setShareToken(result.token);
       const url = `${window.location.origin}/s/${result.token}`;
       await navigator.clipboard.writeText(url).catch(() => {});
       showNotify(`SHARE: link copied — /s/${result.token.slice(0, 6)}…  [OK]`);
       setInspectorOpen(true);
     });
-  }, [noteId, showNotify, setInspectorOpen]);
+  }, [activeNoteId, showNotify, setInspectorOpen]);
 
   const handleUnshare = useCallback(() => {
+    if (!activeNoteId) return;
     startTransition(async () => {
-      await revokeShareAction({ noteId });
+      await revokeShareAction({ noteId: activeNoteId });
       setShareToken(null);
       setShareViewers([]);
       showNotify("SHARE: link revoked  [OK]");
     });
-  }, [noteId, showNotify]);
+  }, [activeNoteId, showNotify]);
 
   const handleCopyShare = useCallback(() => {
     if (!shareToken) return;
@@ -183,15 +229,8 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   );
 
   const workspaceOps: WorkspaceOps = {
-    // Command failures are surfaced in the error tone; informational command
-    // output (rename, share) goes through showNotify's default.
     notify: (message) => showNotify(message, "error"),
     openHelp: () => setHelpOpen(true),
-    // Deliberately never navigates. This is a single persistent pane with
-    // an always-visible sidebar, not a multi-window Vim session -- `:q`
-    // closes whichever overlay is on top (mirroring real Vim's `:q` closing
-    // a help/preview window), or is a no-op if the plain note view is all
-    // that's showing.
     quit: () => {
       if (helpOpen) setHelpOpen(false);
       else if (inspectorOpen) setInspectorOpen(false);
@@ -203,9 +242,8 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
     updateSettings,
   };
 
-  // Rebuilt each render so the dispatcher always sees current closures.
   const commandContext: CommandContext = {
-    note: { save: write, isDirty, ...noteOps },
+    note: { save: write, isDirty: activeIsDirty, ...noteOps },
     workspace: workspaceOps,
   };
 
@@ -217,25 +255,24 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
         replaceFirstH1: handle.replaceFirstH1,
         execVimEx: handle.execVimEx,
       };
-      // Fire-and-forget from this synchronous handler; dispatchCommand is
-      // async only so `:wq` can await the write before quitting.
       void dispatchCommand(raw, ops, commandContext);
     }
     editorRef.current?.focus();
   };
 
   // notes is undefined only on a genuine cache miss (should be rare -- the
-  // layout always prefetches it); note is undefined when the id doesn't
-  // exist or isn't this user's, which the cache can't distinguish and
-  // deliberately doesn't try to (see notes/[id]/page.tsx).
+  // layout always prefetches metadata).
   if (!notes) {
     return <div className="w-full px-space-8 pt-space-8" />;
+  }
+  if (activeNoteId === null) {
+    return <EmptyBuffer />;
   }
   if (!note) {
     return (
       <div className="w-full px-space-8 pt-space-8 font-code-editor text-code-editor">
         <p className="text-error">E484: no such buffer</p>
-        <button onClick={() => router.push("/notes")} className="mt-space-2 text-primary hover:underline">
+        <button onClick={goHome} className="mt-space-2 text-primary hover:underline">
           ← back to notes
         </button>
       </div>
@@ -243,60 +280,55 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
   }
 
   if (isDesktop === null) {
-    // Briefly unknown on first client paint; avoids mounting CodeMirror
-    // with the wrong keymap and immediately remounting it.
     return <div className="w-full px-space-8 pt-space-8" />;
   }
 
   const vimEnabled = isDesktop;
-  const bufferNumber = computeBufferNumber(notes, noteId);
+  const bufferNumber = computeBufferNumber(notes, activeNoteId);
+  const cold = note.content === undefined;
 
   return (
     <div className="flex h-full">
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="w-full px-space-4 sm:px-space-8 pt-space-4 sm:pt-space-2 flex-1 flex flex-col min-h-0">
-          {/* One header for every mode -- it never swaps, so switching
-              modes can never shift the canvas below it. The mode pill
-              inside it already reads live from the store, which is the
-              only thing that needs to change per mode (§ terminal-header
-              unification: NORMAL/VISUAL/INSERT are one buffer, not three
-              different screens). */}
           <div className="flex items-center mb-space-4 shrink-0">
             <BufferHeaderNormal
               title={note.title}
-              content={note.content}
+              content={note.content ?? ""}
               bufferNumber={bufferNumber}
               createdAt={new Date(note.createdAt)}
               onToggleInspector={toggleInspector}
             />
           </div>
 
-          {/* Canvas geometry is constant across modes -- only the
-              decorative glow (absolutely positioned, no layout impact)
-              differs for INSERT. CodeMirror's own .cm-content padding
-              (rbnotes-theme.ts) is the real spacing, not this wrapper. */}
           <div className="w-full flex-1 min-h-[320px] relative bg-surface-dim overflow-hidden rounded-lg">
             {mode === "INSERT" && (
               <div className="absolute -top-12 left-1/4 w-96 h-28 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
             )}
-            <div className="relative h-full select-text">
+            <div className="relative h-full select-text" style={cold ? { visibility: "hidden" } : undefined}>
               <Editor
                 ref={editorRef}
-                initialContent={note.content}
-                initialSearchQuery={initialSearchQuery}
+                noteId={activeNoteId}
+                content={note.content}
+                pendingMatch={pendingQuery}
                 settings={settings}
                 vimEnabled={vimEnabled}
-                onChange={markDirty}
+                onChange={handleChange}
                 onIntent={handleIntent}
               />
             </div>
+            {cold && <BufferSkeleton />}
             {helpOpen && <HelpBuffer onClose={() => setHelpOpen(false)} />}
           </div>
 
           {vimEnabled ? (
-            <VimStatuslineDock title={note.title} onSave={write} />
+            <VimStatuslineDock title={note.title} onSave={() => void write()} />
           ) : (
-            <QuickActionsStrip onSave={write} />
+            <QuickActionsStrip onSave={() => void write()} />
+          )}
+
+          {saveState === "error" && (
+            <SaveRetryToast onRetry={() => void write()} />
           )}
 
           {notify && (
@@ -315,7 +347,6 @@ export function BufferWorkspace({ noteId }: { noteId: string }) {
           onSubmit={handleCommandSubmit}
         />
 
-        {/* Mobile `:` entry point -- there is no NORMAL mode to type ':' from. */}
         {!vimEnabled && !commandDockOpen && (
           <button
             onClick={() => setCommandDockOpen(true)}

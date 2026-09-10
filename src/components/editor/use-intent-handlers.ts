@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useWorkspaceStore } from "@/lib/store";
 import { useIsDesktop } from "@/lib/use-is-desktop";
-import { useCreateNote } from "@/lib/notes-query";
+import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import type { IntentHandlers } from "@/components/editor/shortcuts";
 
 /**
@@ -13,7 +13,7 @@ import type { IntentHandlers } from "@/components/editor/shortcuts";
  * behaviour regardless of where it was pressed.
  */
 export function useIntentHandlers(): IntentHandlers {
-  const createNote = useCreateNote();
+  const { createAndOpenNote } = useWorkspace();
   const isDesktop = useIsDesktop();
   const toggleSidebar = useWorkspaceStore((s) => s.toggleSidebar);
   const setMobileSidebarOpen = useWorkspaceStore((s) => s.setMobileSidebarOpen);
@@ -27,7 +27,7 @@ export function useIntentHandlers(): IntentHandlers {
       // The active buffer registered its write; a shell-level Ctrl+S saves
       // whichever editor is mounted rather than needing its own copy.
       save: () => useWorkspaceStore.getState().saveActive?.(),
-      newNote: createNote,
+      newNote: createAndOpenNote,
       openQuickSwitcher: () => setQuickSwitcherOpen(true),
       openSearch: () => setSearchOpen(true),
       toggleSidebar: () => {
@@ -37,7 +37,7 @@ export function useIntentHandlers(): IntentHandlers {
       openCommandDock: () => setCommandDockOpen(true),
     }),
     [
-      createNote,
+      createAndOpenNote,
       isDesktop,
       toggleSidebar,
       setMobileSidebarOpen,

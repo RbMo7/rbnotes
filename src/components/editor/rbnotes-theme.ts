@@ -97,9 +97,34 @@ export function rbnotesTheme(mode: "NORMAL" | "INSERT" | "VISUAL" | "EDIT" | "RO
       ".cm-placeholder": {
         color: `${colors.onSurfaceVariant}66`,
       },
-      // Vim mode's own status bar (from @replit/codemirror-vim) — hidden;
-      // we render our own status bar matching the Stitch footer instead.
-      ".cm-vim-panel, .cm-panels": { display: "none" },
+      // We mount vim() with `status: false` (our own statusline replaces its
+      // built-in one), so .cm-vim-panel is NEVER used for a persistent
+      // status bar in this app -- @replit/codemirror-vim reuses that exact
+      // class for its `/` and `:` prompt dialogs too (see its
+      // createVimPanel/statusPanel, which share one class name). An earlier
+      // version of this theme hid `.cm-vim-panel` outright to suppress the
+      // redundant status bar, which also hid the search/ex-command dialog --
+      // a display:none element can never receive focus, so `inp.focus()`
+      // silently no-ops and every keystroke meant for the prompt fell
+      // through to the live buffer as normal editing input instead. Style
+      // it to match our theme instead of hiding it.
+      ".cm-panels": { border: "none" },
+      ".cm-vim-panel": {
+        backgroundColor: colors.surfaceContainer,
+        borderTop: `1px solid ${colors.outlineVariant}`,
+        padding: "0.25rem 1rem",
+        fontFamily: "var(--font-jetbrains-mono), JetBrains Mono, monospace",
+        fontSize: "0.875rem",
+      },
+      ".cm-vim-panel input": {
+        background: "transparent",
+        border: "none",
+        outline: "none",
+        color: colors.onSurface,
+        fontFamily: "inherit",
+        fontSize: "inherit",
+        width: "100%",
+      },
     },
     { dark: true },
   );

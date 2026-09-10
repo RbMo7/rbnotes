@@ -4,7 +4,7 @@ import { getAuthedUser } from "@/lib/auth";
 import * as shares from "@/lib/shares";
 import { noteIdSchema } from "@/lib/schemas";
 
-// No revalidatePath here: BufferWorkspace already updates its own share
+// No revalidatePath here: WorkspaceBuffer already updates its own share
 // state client-side from these actions' return values (see
 // InspectorPanel's props), so revalidating the note page just forced an
 // unnecessary server refetch/re-render on every share/unshare click.

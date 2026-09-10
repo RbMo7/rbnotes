@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { useNotesMutations, useCreateNote } from "@/lib/notes-query";
+import { useNotesMutations } from "@/lib/notes-query";
+import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { displayFilename } from "@/lib/format";
 import { setNoteFlagsAction, deleteNoteAction } from "@/server/actions/notes";
 import { resolveDeleteMode, type NoteOps } from "@/components/editor/command-dispatch";
@@ -26,9 +26,8 @@ export function useNoteOperations({
   getContent: () => string;
   notify: (message: string) => void;
 }): Pick<NoteOps, "create" | "rename" | "delete"> {
-  const router = useRouter();
   const { updateNote, removeNote } = useNotesMutations();
-  const createNote = useCreateNote();
+  const { createAndOpenNote, goHome } = useWorkspace();
 
   const rename = useCallback(
     (newTitle: string) => {
@@ -40,10 +39,10 @@ export function useNoteOperations({
 
   const deleteNote = useCallback(
     (hard: boolean) => {
-      // Same instant pattern as `:new`: update the cache and navigate first,
-      // persist in the background. There is nothing to roll back to --
-      // archived/deleted is a one-way door, same as real Vim's `:bd`. The
-      // archive-vs-purge decision itself is the command layer's policy
+      // Same instant pattern as `:new`: update the cache and switch buffers
+      // first, persist in the background. There is nothing to roll back to
+      // -- archived/deleted is a one-way door, same as real Vim's `:bd`.
+      // The archive-vs-purge decision itself is the command layer's policy
       // (resolveDeleteMode); this just applies the resulting mode.
       const mode = resolveDeleteMode(hard, getContent());
       if (mode === "purge") {
@@ -53,13 +52,13 @@ export function useNoteOperations({
         updateNote(noteId, { archived: true });
         setNoteFlagsAction({ noteId, archived: true }).catch(() => {});
       }
-      router.push("/notes");
+      goHome();
     },
-    [noteId, getContent, removeNote, updateNote, router],
+    [noteId, getContent, removeNote, updateNote, goHome],
   );
 
   return useMemo(
-    () => ({ create: createNote, rename, delete: deleteNote }),
-    [createNote, rename, deleteNote],
+    () => ({ create: createAndOpenNote, rename, delete: deleteNote }),
+    [createAndOpenNote, rename, deleteNote],
   );
 }

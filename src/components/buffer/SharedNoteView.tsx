@@ -67,7 +67,8 @@ export function SharedNoteView({
         />
         <div className="flex-1 min-h-[400px] mt-space-4 bg-surface-dim rounded-lg overflow-hidden">
           <Editor
-            initialContent={content}
+            noteId="shared"
+            content={content}
             settings={defaultSettings}
             vimEnabled={false}
             readOnly

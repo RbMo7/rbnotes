@@ -16,12 +16,26 @@
  */
 export const notesQueryKey = ["notes"] as const;
 
-export type FullNote = {
+/**
+ * One record per note in the single client-side cache the whole app reads
+ * from. `content` is deliberately optional rather than defaulting to `""`:
+ * absent means "not fetched into this client yet" (cold), a string
+ * (including `""`) means the real content is here (warm). Collapsing that
+ * distinction to an empty string would make a cold buffer indistinguishable
+ * from a genuinely empty note, and a save could silently overwrite real
+ * content with emptiness -- the data-loss guard is encoded in the
+ * representation itself, not in a separate "isLoading" flag callers could
+ * forget to check.
+ */
+export type NoteRecord = {
   id: string;
   title: string;
-  content: string;
   pinned: boolean;
   archived: boolean;
   createdAt: string;
   updatedAt: string;
+  content?: string;
 };
+
+/** The metadata-only shape the first-paint fetch returns -- never carries content. */
+export type NoteMeta = Omit<NoteRecord, "content">;
