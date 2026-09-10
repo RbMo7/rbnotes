@@ -156,15 +156,36 @@
      background and box-shadow Chrome/Safari inject on autofilled inputs),
      which otherwise reads as a second border around auth fields. The
      transition-delay trick keeps our colors applied even as the field is
-     actively being autofilled, not just after. */
+     actively being autofilled, not just after. `!important` because
+     Chrome/Safari apply this with enough weight of their own that the
+     plain (non-!important) version loses on some field/state
+     combinations. */
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
-  input:-webkit-autofill:focus {
-    -webkit-box-shadow: 0 0 0 1000px var(--color-surface-container) inset;
-    box-shadow: 0 0 0 1000px var(--color-surface-container) inset;
-    -webkit-text-fill-color: var(--color-on-surface);
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px var(--color-surface-container) inset !important;
+    box-shadow: 0 0 0 1000px var(--color-surface-container) inset !important;
+    -webkit-text-fill-color: var(--color-on-surface) !important;
     caret-color: var(--color-on-surface);
     transition: background-color 600000s ease-in-out 0s;
+  }
+
+  /* A password field with a saved credential available gets its own
+     native focus ring in Chrome/Safari on macOS, drawn directly on the
+     <input> itself rather than the wrapper div AuthField renders around
+     it (which also contains the `>`/`*` prefix). Because that native
+     ring is sized to the narrower inner element, it reads as a second,
+     smaller blue border nested inside ours. The wrapper's own
+     `focus-within:border-primary` is the real focus indicator here (see
+     build plan's accessibility section) -- `!important` because this
+     specific native ring otherwise outranks the plain Tailwind
+     `outline-none`/`focus:outline-none` utilities already on the input. */
+  input:focus,
+  input:focus-visible,
+  input:-webkit-autofill,
+  input:-webkit-autofill:focus {
+    outline: none !important;
   }
 }
 

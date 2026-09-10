@@ -136,6 +136,15 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     viewRef.current = view;
     setReady(true);
 
+    // Opening a note (including a brand-new one from :new) should be
+    // typeable immediately -- no click into the canvas first. Skipped on
+    // mobile/no-vim (focusing there pops the OS keyboard just from
+    // switching notes to read, not because you meant to type) and for a
+    // read-only shared view (nothing to type into).
+    if (vimEnabled && !readOnly) {
+      view.focus();
+    }
+
     const cm = vimEnabled && !readOnly ? getCM(view) : null;
 
     if (cm) {
