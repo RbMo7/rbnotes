@@ -34,6 +34,7 @@ function makeHarness(options: { execVimEx?: boolean; saveResult?: boolean } = {}
     share: vi.fn(),
     unshare: vi.fn(),
     updateSettings: vi.fn(),
+    openSettings: vi.fn(),
   };
   const ctx: CommandContext = { note, workspace };
 
@@ -171,6 +172,13 @@ describe("dispatchCommand", () => {
     await dispatchCommand("set bogus", h.ops, h.ctx);
     expect(h.workspace.updateSettings).not.toHaveBeenCalled();
     expect(h.workspace.notify).toHaveBeenCalledWith(expect.stringContaining("E518"));
+  });
+
+  it(":set with no option opens Settings instead of erroring", async () => {
+    await dispatchCommand("set", h.ops, h.ctx);
+    expect(h.workspace.openSettings).toHaveBeenCalledOnce();
+    expect(h.workspace.updateSettings).not.toHaveBeenCalled();
+    expect(h.workspace.notify).not.toHaveBeenCalled();
   });
 
   it("falls unknown commands through to genuine Vim ex commands", async () => {

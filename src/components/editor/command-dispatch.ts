@@ -35,6 +35,8 @@ export type WorkspaceOps = {
   share: () => void;
   unshare: () => void;
   updateSettings: (patch: Partial<Settings>) => void;
+  /** Navigate to the Settings page -- what bare `:set` (no option given) opens. */
+  openSettings: () => void;
 };
 
 export type CommandContext = {
@@ -137,6 +139,12 @@ export async function dispatchCommand(raw: string, ops: EditorOps, ctx: CommandC
       ctx.workspace.unshare();
       return;
     case "set":
+      // Bare `:set` (no option) opens the Settings page -- `:set <option>`
+      // keeps its real meaning below (editor display options).
+      if (!arg) {
+        ctx.workspace.openSettings();
+        return;
+      }
       applyAppSetting(arg, ctx);
       return;
     default:

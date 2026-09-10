@@ -48,6 +48,7 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
       [":rename <title>", "rename note"],
       [":delete", "archive note (:delete! deletes)"],
       [":share / :unshare", "create or revoke share link"],
+      [":set", "open settings"],
       [":set nu|rnu|wrap|ts=N", "editor display options"],
       [":insp", "toggle inspector"],
       [":b", "toggle sidebar"],

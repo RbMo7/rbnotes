@@ -10,15 +10,24 @@ import { GithubButton } from "@/components/auth/AuthButtons";
  * GitHub provider isn't configured yet in the Supabase dashboard — Supabase
  * just returns an error, which we surface through onError.
  */
-export function GithubOAuthButton({ onError }: { onError: (message: string) => void }) {
+export function GithubOAuthButton({
+  onError,
+  next = "/",
+}: {
+  onError: (message: string) => void;
+  /** Where /auth/callback should land after the OAuth round-trip -- same `next` the email/password path honors. */
+  next?: string;
+}) {
   const trigger = useCallback(async () => {
     const supabase = createClient();
+    const redirectTo = new URL("/auth/callback", window.location.origin);
+    redirectTo.searchParams.set("next", next);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: redirectTo.toString() },
     });
     if (error) onError("OAUTH: " + error.message);
-  }, [onError]);
+  }, [onError, next]);
 
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {

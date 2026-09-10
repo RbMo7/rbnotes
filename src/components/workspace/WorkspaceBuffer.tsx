@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { VimStatuslineDock } from "@/components/buffer/VimStatuslineDock";
 import { QuickActionsStrip } from "@/components/buffer/QuickActionsStrip";
@@ -39,6 +40,7 @@ import type { Settings } from "@/lib/schemas";
  */
 export function WorkspaceBuffer() {
   const { activeNoteId, goHome } = useWorkspace();
+  const router = useRouter();
   const editorRef = useRef<EditorHandle>(null);
   const isDesktop = useIsDesktop();
 
@@ -238,6 +240,7 @@ export function WorkspaceBuffer() {
     share: handleShare,
     unshare: handleUnshare,
     updateSettings,
+    openSettings: () => router.push("/settings"),
   };
 
   const commandContext: CommandContext = {

@@ -76,6 +76,7 @@ export function LoginForm({ next }: { next: string }) {
                 ["[Tab]", "Next"],
                 ["[Enter]", "Submit"],
                 ["[Esc]", "Clear"],
+                ["[Ctrl+G]", "GitHub"],
               ]}
             />
           }
@@ -144,7 +145,7 @@ export function LoginForm({ next }: { next: string }) {
             </div>
           </form>
           <OrDivider label="or continue with" />
-          <GithubOAuthButton onError={setStatus} />
+          <GithubOAuthButton onError={setStatus} next={next} />
         </TerminalWindow>
         <StatusToast message={status} tone={error ? "error" : "info"} />
       </div>
