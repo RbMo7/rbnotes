@@ -61,7 +61,7 @@ export function Sidebar() {
 
       <SidebarLists />
 
-      <div className="h-12 px-space-4 border-t border-outline-variant/30 flex items-center justify-between shrink-0 bg-surface-container-low">
+      <div className="h-12 px-space-4 border-t border-outline-variant/30 flex items-center shrink-0 bg-surface-container-low">
         <Link
           href="/settings"
           data-active={pathname === "/settings"}
@@ -71,10 +71,6 @@ export function Sidebar() {
           <span>Settings</span>
           <span className="font-label-sm text-label-sm text-outline">[:set]</span>
         </Link>
-        <div className="flex items-center gap-space-2">
-          <span className="w-2 h-2 rounded-full bg-primary inline-block" />
-          <span className="font-label-sm text-label-sm text-outline">READY</span>
-        </div>
       </div>
       </aside>
     </>

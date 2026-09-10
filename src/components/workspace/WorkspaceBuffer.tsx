@@ -290,8 +290,8 @@ export function WorkspaceBuffer() {
   return (
     <div className="flex h-full">
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="w-full px-space-4 sm:px-space-8 pt-space-4 flex-1 flex flex-col min-h-0">
-          <div className="w-full flex-1 min-h-[320px] relative bg-surface-dim overflow-hidden rounded-lg">
+        <div className="w-full flex-1 flex flex-col min-h-0">
+          <div className="w-full flex-1 min-h-[320px] relative bg-surface-container-lowest overflow-hidden">
             {mode === "INSERT" && (
               <div className="absolute -top-12 left-1/4 w-96 h-28 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
             )}
@@ -311,21 +311,23 @@ export function WorkspaceBuffer() {
             {helpOpen && <HelpBuffer onClose={() => setHelpOpen(false)} />}
           </div>
 
-          {vimEnabled ? (
-            <VimStatuslineDock onSave={() => void write()} />
-          ) : (
-            <QuickActionsStrip onSave={() => void write()} />
-          )}
+          <div className="px-space-4 sm:px-space-8 pb-space-4 shrink-0">
+            {vimEnabled ? (
+              <VimStatuslineDock onSave={() => void write()} />
+            ) : (
+              <QuickActionsStrip onSave={() => void write()} />
+            )}
 
-          {saveState === "error" && (
-            <SaveRetryToast onRetry={() => void write()} />
-          )}
+            {saveState === "error" && (
+              <SaveRetryToast onRetry={() => void write()} />
+            )}
 
-          {notify && (
-            <div className="mt-space-3">
-              <StatusToast message={notify} tone={notifyTone} />
-            </div>
-          )}
+            {notify && (
+              <div className="mt-space-3">
+                <StatusToast message={notify} tone={notifyTone} />
+              </div>
+            )}
+          </div>
         </div>
 
         <CommandDock
