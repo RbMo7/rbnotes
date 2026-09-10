@@ -53,8 +53,11 @@ export function RegisterForm() {
   );
 
   const commands = useMemo(
-    () => ({ new: () => formRef.current?.requestSubmit() }),
-    [],
+    () => ({
+      new: () => formRef.current?.requestSubmit(),
+      wq: () => router.push("/login"),
+    }),
+    [router],
   );
 
   return (

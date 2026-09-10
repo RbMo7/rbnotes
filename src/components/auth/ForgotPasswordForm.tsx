@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TerminalWindow, TerminalHeader } from "@/components/auth/TerminalWindow";
 import { AuthField } from "@/components/auth/AuthField";
@@ -10,6 +11,7 @@ import { requestPasswordResetAction } from "@/server/actions/auth";
 import { forgotPasswordSchema } from "@/lib/schemas";
 
 export function ForgotPasswordForm() {
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -42,8 +44,11 @@ export function ForgotPasswordForm() {
   );
 
   const commands = useMemo(
-    () => ({ w: () => formRef.current?.requestSubmit() }),
-    [],
+    () => ({
+      w: () => formRef.current?.requestSubmit(),
+      wq: () => router.push("/login"),
+    }),
+    [router],
   );
 
   return (

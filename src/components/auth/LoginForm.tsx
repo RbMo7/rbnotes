@@ -47,8 +47,11 @@ export function LoginForm({ next }: { next: string }) {
   );
 
   const commands = useMemo(
-    () => ({ wq: () => formRef.current?.requestSubmit() }),
-    [],
+    () => ({
+      wq: () => formRef.current?.requestSubmit(),
+      new: () => router.push("/register"),
+    }),
+    [router],
   );
 
   return (
