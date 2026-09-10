@@ -30,6 +30,8 @@ export function SearchPalette() {
   const open = useWorkspaceStore((s) => s.searchOpen);
   const setOpen = useWorkspaceStore((s) => s.setSearchOpen);
   const setPendingSearchMatch = useWorkspaceStore((s) => s.setPendingSearchMatch);
+  const searchSeed = useWorkspaceStore((s) => s.searchSeed);
+  const setSearchSeed = useWorkspaceStore((s) => s.setSearchSeed);
   const { data: notes = [] } = useNotesQuery();
   const { openNote } = useWorkspace();
   const [query, setQuery] = useState("");
@@ -40,8 +42,13 @@ export function SearchPalette() {
     if (!open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery("");
+      return;
     }
-  }, [open]);
+    if (searchSeed !== null) {
+      setQuery(searchSeed);
+      setSearchSeed(null); // consume once, same pattern as pendingSearchMatch
+    }
+  }, [open, searchSeed, setSearchSeed]);
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>

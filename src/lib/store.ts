@@ -59,6 +59,13 @@ type WorkspaceState = {
   pendingSearchMatch: { noteId: string; query: string } | null;
   setPendingSearchMatch: (match: { noteId: string; query: string } | null) => void;
 
+  // A query typed elsewhere (the sidebar filter's `/` escalation, the
+  // Dashboard's search box) that should seed SearchPalette the moment it
+  // opens. Consumed once, same pattern as pendingSearchMatch.
+  searchSeed: string | null;
+  setSearchSeed: (seed: string | null) => void;
+  openSearchWith: (query: string) => void;
+
   inspectorOpen: boolean;
   setInspectorOpen: (open: boolean) => void;
   toggleInspector: () => void;
@@ -138,6 +145,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
 
   pendingSearchMatch: null,
   setPendingSearchMatch: (pendingSearchMatch) => set({ pendingSearchMatch }),
+
+  searchSeed: null,
+  setSearchSeed: (searchSeed) => set({ searchSeed }),
+  openSearchWith: (searchSeed) => set({ searchSeed, searchOpen: true }),
 
   inspectorOpen: false,
   setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),

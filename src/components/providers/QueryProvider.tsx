@@ -10,7 +10,7 @@ function getQueryClient() {
   // Server: always a new client (per request, never shared across users).
   // Browser: one singleton client that survives client-side navigation, so
   // the notes cache this whole architecture depends on actually persists
-  // as you move between notes/tags/graph instead of resetting every time.
+  // as you move between notes/tags/the Dashboard instead of resetting every time.
   if (typeof window === "undefined") return makeQueryClient();
   if (!browserQueryClient) browserQueryClient = makeQueryClient();
   return browserQueryClient;

@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useWorkspaceNav } from "@/components/workspace/useWorkspaceNav";
 import { useWarmUpScheduler } from "@/components/workspace/useWarmUpScheduler";
 import { useNotesQuery, useCreateNote } from "@/lib/notes-query";
 import type { NoteRecord } from "@/lib/note-types";
+import { useWorkspaceStore } from "@/lib/store";
 import { WorkspaceContextProvider, type WorkspaceApi } from "@/components/workspace/WorkspaceContext";
 import { WorkspaceBuffer } from "@/components/workspace/WorkspaceBuffer";
 import { Sidebar } from "@/components/shell/Sidebar";
@@ -24,40 +25,37 @@ function mostRecentOpenNote(notes: NoteRecord[]): NoteRecord | undefined {
  * links, the shell's Ctrl+N/Ctrl+P) and what makes the buffer UI
  * (WorkspaceBuffer) persistent across every in-app note switch: it isn't
  * part of `children` at all, it's rendered directly here, and `children`
- * only takes over when the URL is outside `/notes*` (tags, graph,
- * settings...).
+ * only takes over when the URL is outside `/notes*` (the Dashboard,
+ * tags, settings...).
  */
 export function WorkspaceProvider({ email, children }: { email: string; children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const inNotesSection = pathname === "/notes" || pathname.startsWith("/notes/");
 
   const { data: notes } = useNotesQuery();
-  const { activeNoteId: rawActiveNoteId, open, settle, clearToHome } = useWorkspaceNav();
+  const { activeNoteId, open } = useWorkspaceNav();
   const createNote = useCreateNote();
+  const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);
+  const setActiveBufferInfo = useWorkspaceStore((s) => s.setActiveBufferInfo);
   useWarmUpScheduler();
 
-  // Home entry: bare `/notes` (nothing switched to yet) resolves to the
-  // most-recently-updated non-archived note. Derived synchronously at
-  // render time (not settled-then-re-rendered) so the very first paint
-  // already shows it -- no blank redirect hop through the empty-buffer
-  // screen while an effect catches up. The address bar is kept in sync
-  // separately, below, since a history API call can't happen during render.
-  const resolvedHome = useMemo(
-    () => (notes ? mostRecentOpenNote(notes) : undefined),
-    [notes],
-  );
-  const activeNoteId = rawActiveNoteId ?? resolvedHome?.id ?? null;
-
+  // The Dashboard (`/`) is the landing screen now, not a resolved buffer --
+  // so nothing here auto-opens a note on bare `/notes` anymore. Leaving the
+  // notes section still needs its own cleanup: the footer's filename/word
+  // count are written by whichever WorkspaceBuffer was last mounted and
+  // never cleared on their own, since WorkspaceBuffer itself unmounts.
   useEffect(() => {
-    if (!inNotesSection || rawActiveNoteId !== null || !resolvedHome) return;
-    settle(resolvedHome.id);
-  }, [inNotesSection, rawActiveNoteId, resolvedHome, settle]);
+    if (inNotesSection) return;
+    setActiveFilename(null);
+    setActiveBufferInfo(null);
+  }, [inNotesSection, setActiveFilename, setActiveBufferInfo]);
 
   const goHome = useCallback(() => {
     const home = notes ? mostRecentOpenNote(notes) : undefined;
     if (home) open(home.id);
-    else clearToHome();
-  }, [notes, open, clearToHome]);
+    else router.replace("/");
+  }, [notes, open, router]);
 
   const createAndOpenNote = useCallback(() => {
     const id = createNote();

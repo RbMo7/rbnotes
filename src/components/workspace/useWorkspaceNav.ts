@@ -78,17 +78,9 @@ export function useWorkspaceNav() {
     setSwitchedId(noteId);
   }, []);
 
-  /** No notes left to resolve home to -- clears to the explicit empty state, still replacing (not pushing) history. */
-  const clearToHome = useCallback(() => {
-    lastSelfHrefRef.current = "/notes";
-    window.history.replaceState(null, "", "/notes");
-    setSwitchedId(null);
-  }, []);
-
   return {
     activeNoteId: switchedId === undefined ? parseNoteIdFromPath(pathname) : switchedId,
     open,
     settle,
-    clearToHome,
   };
 }

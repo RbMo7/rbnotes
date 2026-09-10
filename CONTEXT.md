@@ -36,6 +36,10 @@ _Avoid_: file, document, tab
 The persistent shell buffers live in. Switching buffers is instant client state inside the workspace, never a navigation.
 _Avoid_: page, route
 
+**Dashboard**:
+The landing screen shown on every fresh load — sign-in, new tab, restart — before any buffer is open: recent notes, a "+ new note" action, and account access. Reached again anytime by clicking the wordmark. Never appears mid-session; switching buffers inside the workspace stays instant and never returns here.
+_Avoid_: home page, start screen
+
 **Autosave**:
 Silent background persist after a short idle. Success is silent; failure toasts with retry. `:w` and `Ctrl+S` are a force-flush: the same persist, immediately.
 _Avoid_: save button, manual save

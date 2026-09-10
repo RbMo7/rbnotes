@@ -80,13 +80,6 @@ describe("useWorkspaceNav", () => {
     expect(window.history.length).toBe(lengthBefore);
   });
 
-  it("clearToHome() moves to the explicit empty state (not the URL-derived fallback)", () => {
-    const { result } = renderHook(() => useWorkspaceNav());
-    act(() => result.current.clearToHome());
-    expect(result.current.activeNoteId).toBeNull();
-    expect(window.location.pathname).toBe("/notes");
-  });
-
   it("regression (no-trap): handling Back/Forward (popstate) never itself pushes or replaces a history entry", () => {
     // The "Back past the oldest entry exits the workspace" guarantee holds
     // purely by *not interfering*: this hook must never call

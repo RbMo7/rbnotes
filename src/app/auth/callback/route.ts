@@ -4,13 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 /**
  * Exchanges the `code` param Supabase appends to both OAuth redirects and
  * emailed magic/recovery links for a real session, then continues to
- * wherever the flow was headed (`next` — defaults to the notes workspace,
+ * wherever the flow was headed (`next` — defaults to the Dashboard,
  * but the password-reset email sets it to `/reset`).
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/notes";
+  const next = searchParams.get("next") ?? "/";
 
   if (code) {
     const supabase = await createClient();

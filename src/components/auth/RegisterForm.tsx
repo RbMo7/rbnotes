@@ -49,7 +49,7 @@ export function RegisterForm() {
           return;
         }
         setStatus("REGISTER: identity created — signing in...");
-        router.push("/notes");
+        router.push("/");
         router.refresh();
       });
     },

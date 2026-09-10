@@ -11,3 +11,7 @@ The app felt like a website: first paint waited on every note's full content, an
 
 - Back/Forward walk buffer history with cursor restoration rather than triggering data fetches; deep links still work as workspace entry points.
 - Unwarmed content is represented as absent, never empty, so a save can never overwrite real content with an empty document; late warm-up writes never clobber dirty buffers.
+
+## Amendment (unified shell)
+
+Home entry is no longer "resolve to the most-recently-updated buffer" — bare `/notes` now redirects to the Dashboard at `/`, a real route rendered inside this same persistent shell. The most-recent-buffer resolution survives only inside `goHome()`, used after a note is deleted, where landing on the Dashboard instead of the next buffer would be a jarring context switch. `clearToHome` (the "no notes left" fallback) is gone; that case now navigates to `/` directly.

@@ -6,5 +6,5 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const { next } = await searchParams;
-  return <LoginForm next={next && next.startsWith("/") ? next : "/notes"} />;
+  return <LoginForm next={next && next.startsWith("/") ? next : "/"} />;
 }

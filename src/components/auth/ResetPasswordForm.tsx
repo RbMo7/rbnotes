@@ -39,7 +39,7 @@ export function ResetPasswordForm() {
           return;
         }
         setStatus("RESET: secret updated — redirecting...");
-        router.push("/notes");
+        router.push("/");
         router.refresh();
       });
     },

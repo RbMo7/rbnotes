@@ -50,7 +50,7 @@ export function SharedNoteView({
         </div>
         <div className="flex items-center gap-space-4 font-label-sm text-label-sm text-on-surface-variant">
           <span>shared by {ownerEmail}</span>
-          <Link href="/notes" className="text-primary hover:underline">
+          <Link href="/" className="text-primary hover:underline">
             ← your notes
           </Link>
         </div>

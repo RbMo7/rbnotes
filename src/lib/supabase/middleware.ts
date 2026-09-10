@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
 
-const PROTECTED_PREFIXES = ["/notes", "/tags", "/graph", "/settings", "/s/"];
+const PROTECTED_PREFIXES = ["/notes", "/settings", "/s/"];
 // /reset is deliberately excluded: it's reached via Supabase's password
 // recovery link, which signs the user in with a temporary session before
 // redirecting here. Treating it as an "auth page" would bounce that
@@ -48,7 +48,10 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+  // "/" is the Dashboard -- an exact match, never a prefix (a prefix would
+  // swallow every route).
+  const isProtected =
+    pathname === "/" || PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   const isAuthPage = AUTH_PREFIXES.some((p) => pathname.startsWith(p));
 
   if (!user && isProtected) {
@@ -58,7 +61,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && isAuthPage) {
-    return NextResponse.redirect(new URL("/notes", request.url));
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return supabaseResponse;

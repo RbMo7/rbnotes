@@ -1,8 +1,6 @@
-/**
- * Bare `/notes` -- entry point only. WorkspaceProvider resolves home (the
- * most-recently-updated non-archived note) once metadata is available; see
- * its module doc and ADR-0001.
- */
+import { redirect } from "next/navigation";
+
+/** Bare `/notes` has no buffer to show -- the Dashboard at `/` is the landing screen now. */
 export default function NotesIndexPage() {
-  return null;
+  redirect("/");
 }
