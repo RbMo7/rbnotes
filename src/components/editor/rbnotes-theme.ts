@@ -113,6 +113,17 @@ export function rbnotesTheme(mode: "NORMAL" | "INSERT" | "VISUAL" | "EDIT" | "RO
       ".cm-placeholder": {
         color: mix(colors.onSurfaceVariant, 40),
       },
+      // The in-document look for a `#tag` (extensions.ts's tagPillDecorations
+      // marks it with this class) -- a real pill, not just bold colored
+      // text, so it visually reads as a tag rather than emphasized prose.
+      ".cm-tag-pill": {
+        backgroundColor: colors.secondaryContainer,
+        color: colors.secondary,
+        borderRadius: "0.25rem",
+        padding: "0.05em 0.4em",
+        fontWeight: "600",
+        cursor: "pointer",
+      },
       // We mount vim() with `status: false` (our own statusline replaces its
       // built-in one), so .cm-vim-panel is NEVER used for a persistent
       // status bar in this app -- @replit/codemirror-vim reuses that exact

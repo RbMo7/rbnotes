@@ -21,20 +21,34 @@ export function SidebarLists() {
   const [filter, setFilter] = useState("");
   const filterInputRef = useRef<HTMLInputElement>(null);
   const focusTagsRequestId = useWorkspaceStore((s) => s.focusTagsRequestId);
+  const pendingTagFilter = useWorkspaceStore((s) => s.pendingTagFilter);
+  const setPendingTagFilter = useWorkspaceStore((s) => s.setPendingTagFilter);
 
-  // Ctrl+T: jump straight to the Tags tab and focus its filter box, from
-  // anywhere in the app. A pulse counter, not derived from `tab`/`filter`
-  // state, so pressing it again re-focuses even if Tags is already active.
-  // Syncing local UI state to an external signal (the store's counter) is
-  // exactly what an effect is for; it can't be done during render since
-  // focusing an element is inherently imperative.
+  // Ctrl+T (or a `#tag` pill clicked in-editor, which also names a tag):
+  // jump straight to the Tags tab and focus its filter box, from anywhere
+  // in the app. A pulse counter, not derived from `tab`/`filter` state, so
+  // triggering it again re-focuses even if Tags is already active. Syncing
+  // local UI state to an external signal (the store's counter) is exactly
+  // what an effect is for; it can't be done during render since focusing an
+  // element is inherently imperative.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (focusTagsRequestId === 0) return;
     setTab("tags");
-    setExpandedTags(new Set());
-    setFilter("");
+    if (pendingTagFilter) {
+      setFilter(pendingTagFilter);
+      setExpandedTags(new Set([pendingTagFilter]));
+      setPendingTagFilter(null);
+    } else {
+      setExpandedTags(new Set());
+      setFilter("");
+    }
     filterInputRef.current?.focus();
+    // pendingTagFilter/setPendingTagFilter deliberately excluded: this
+    // effect's whole job is reading-and-clearing that one-shot value when
+    // focusTagsRequestId pulses, not re-running when the value it just
+    // cleared changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusTagsRequestId]);
   /* eslint-enable react-hooks/set-state-in-effect */
 

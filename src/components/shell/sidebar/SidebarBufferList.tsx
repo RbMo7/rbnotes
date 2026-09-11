@@ -60,6 +60,7 @@ export function SidebarBufferList({ notes, filter }: { notes: NoteRecord[]; filt
                     id={note.id}
                     title={note.title}
                     updatedAt={note.updatedAt}
+                    pinned={note.pinned}
                     archived={note.archived}
                   />
                 ))}

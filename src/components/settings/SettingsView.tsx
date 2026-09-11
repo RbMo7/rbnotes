@@ -180,6 +180,20 @@ export function SettingsView({ email }: { email: string | null }) {
         </SettingRow>
       </section>
 
+      <section className="bg-surface-container-high">
+        <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">
+          Help
+        </div>
+        <SettingRow label="first-run tour">
+          <button
+            onClick={() => useWorkspaceStore.getState().setOnboardingOpen(true)}
+            className="text-primary hover:underline font-label-md text-label-md"
+          >
+            Replay tour
+          </button>
+        </SettingRow>
+      </section>
+
       {email ? (
         <section className="bg-surface-container-high">
           <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">

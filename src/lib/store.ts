@@ -71,11 +71,28 @@ type WorkspaceState = {
   // pressed again -- an unchanged boolean's effect wouldn't re-fire, but an
   // incrementing counter always produces a new value to key off.
   focusTagsRequestId: number;
-  requestFocusTags: () => void;
+  /** Set alongside focusTagsRequestId when the request names a specific tag (clicking a `#tag` pill in-editor) -- SidebarLists reads-and-clears it once, same "consume once" pattern as pendingSearchMatch, seeding the filter and auto-expanding that tag instead of opening the Tags tab blank. */
+  pendingTagFilter: string | null;
+  setPendingTagFilter: (tag: string | null) => void;
+  requestFocusTags: (tag?: string) => void;
 
   inspectorOpen: boolean;
   setInspectorOpen: (open: boolean) => void;
   toggleInspector: () => void;
+
+  // The small reference popup opened via the footer's "Need help?" button
+  // or `:cheat` -- distinct from the full-buffer HelpBuffer (`:help`), this
+  // one is global (works from the Dashboard too, not just inside a note)
+  // so it stays usable as a reference while typing.
+  cheatsheetOpen: boolean;
+  setCheatsheetOpen: (open: boolean) => void;
+
+  // The first-run tour (OnboardingOverlay). Lives in the store, not
+  // AppShell-local state, so Settings' "Replay tour" link can open it too --
+  // AppShell's own mount-time localStorage check (hasSeenOnboarding) is just
+  // the one caller that flips it true automatically.
+  onboardingOpen: boolean;
+  setOnboardingOpen: (open: boolean) => void;
 
   // Set by whichever note buffer is mounted, so the global fixed footer
   // (which lives above the per-route page tree) can show it.
@@ -190,11 +207,20 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   openSearchWith: (searchSeed) => set({ searchSeed, searchOpen: true }),
 
   focusTagsRequestId: 0,
-  requestFocusTags: () => set((s) => ({ focusTagsRequestId: s.focusTagsRequestId + 1 })),
+  pendingTagFilter: null,
+  setPendingTagFilter: (pendingTagFilter) => set({ pendingTagFilter }),
+  requestFocusTags: (tag) =>
+    set((s) => ({ focusTagsRequestId: s.focusTagsRequestId + 1, pendingTagFilter: tag ?? null })),
 
   inspectorOpen: false,
   setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),
   toggleInspector: () => set((s) => ({ inspectorOpen: !s.inspectorOpen })),
+
+  cheatsheetOpen: false,
+  setCheatsheetOpen: (cheatsheetOpen) => set({ cheatsheetOpen }),
+
+  onboardingOpen: false,
+  setOnboardingOpen: (onboardingOpen) => set({ onboardingOpen }),
 
   activeFilename: null,
   setActiveFilename: (activeFilename) => set({ activeFilename }),

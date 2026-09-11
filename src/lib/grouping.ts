@@ -49,6 +49,21 @@ export function groupNotes(notes: SidebarNote[]): NoteGroup[] {
     }
   }
 
+  // Pinned first, then most-recently-updated -- the server already orders
+  // this way (lib/notes.ts's orderBy), but the client cache doesn't stay
+  // sorted after local mutations (pin toggle, edits) update entries in
+  // place, and a Local-only session's IndexedDB read has no ordering at
+  // all. Sorting once here, the one choke point every caller (Sidebar,
+  // Dashboard's mobile List screen) goes through, means pinning a note
+  // visibly moves it instead of just changing an icon.
+  function byPinnedThenRecency(a: SidebarNote, b: SidebarNote) {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return b.updatedAt.getTime() - a.updatedAt.getTime();
+  }
+  for (const group of [todayGroup, weekGroup, earlierGroup, archive]) {
+    group.sort(byPinnedThenRecency);
+  }
+
   const groups: NoteGroup[] = [];
   if (todayGroup.length) groups.push({ label: "TODAY", notes: todayGroup });
   if (weekGroup.length) groups.push({ label: "THIS WEEK", notes: weekGroup });

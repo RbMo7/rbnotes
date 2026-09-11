@@ -22,12 +22,15 @@ export type NoteOps = {
   create: () => void;
   rename: (title: string) => void;
   delete: (hard: boolean) => void;
+  togglePin: () => void;
 };
 
 /** Workspace chrome the command layer drives. */
 export type WorkspaceOps = {
   notify: (message: string) => void;
   openHelp: () => void;
+  /** Opens the compact reference popup (footer's "Need help?") -- unlike openHelp, usable as a live reference while still typing. */
+  openCheatsheet: () => void;
   /** Close the topmost overlay, mirroring Vim's `:q` closing a preview window. */
   quit: () => void;
   toggleSidebar: () => void;
@@ -61,6 +64,7 @@ export const COMMAND = {
   newNote: "new",
   delete: "delete",
   share: "share",
+  pin: "pin",
   renamePrefix: "rename ",
 } as const;
 
@@ -141,8 +145,14 @@ export async function dispatchCommand(raw: string, ops: EditorOps, ctx: CommandC
     case "delete":
       ctx.note.delete(bang);
       return;
+    case "pin":
+      ctx.note.togglePin();
+      return;
     case "help":
       ctx.workspace.openHelp();
+      return;
+    case "cheat":
+      ctx.workspace.openCheatsheet();
       return;
     case "insp":
       ctx.workspace.toggleInspector();

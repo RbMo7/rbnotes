@@ -44,7 +44,12 @@ export function Dashboard({ email }: { email: string | null }) {
           </button>
         </div>
 
-        <div className="flex-1 min-h-0">
+        {/* Needs `flex flex-col` itself, not just flex-1/min-h-0 -- SidebarLists'
+            own root relies on ITS parent being a flex container to turn its
+            flex-1 into a real height (otherwise it collapses to content
+            height, its scroll area gets 0px, and TODAY's list clips instead
+            of scrolling). */}
+        <div className="flex-1 min-h-0 flex flex-col">
           <SidebarLists />
         </div>
 

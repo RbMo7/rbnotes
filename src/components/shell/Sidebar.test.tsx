@@ -18,7 +18,10 @@ const NOTES: NoteRecord[] = [
 const isDesktopRef = { current: true as boolean | null };
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/notes/1" }));
-vi.mock("@/lib/notes-query", () => ({ useNotesQuery: () => ({ data: NOTES }) }));
+vi.mock("@/lib/notes-query", () => ({
+  useNotesQuery: () => ({ data: NOTES }),
+  useTogglePin: () => vi.fn(),
+}));
 vi.mock("@/lib/use-is-desktop", () => ({ useIsDesktop: () => isDesktopRef.current }));
 vi.mock("@/components/workspace/WorkspaceContext", () => ({
   useWorkspace: () => ({
