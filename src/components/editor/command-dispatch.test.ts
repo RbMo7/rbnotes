@@ -35,6 +35,8 @@ function makeHarness(options: { execVimEx?: boolean; saveResult?: boolean } = {}
     unshare: vi.fn(),
     updateSettings: vi.fn(),
     openSettings: vi.fn(),
+    login: vi.fn(),
+    logout: vi.fn(),
   };
   const ctx: CommandContext = { note, workspace };
 
@@ -179,6 +181,13 @@ describe("dispatchCommand", () => {
     expect(h.workspace.openSettings).toHaveBeenCalledOnce();
     expect(h.workspace.updateSettings).not.toHaveBeenCalled();
     expect(h.workspace.notify).not.toHaveBeenCalled();
+  });
+
+  it(":login and :logout route to their operations", async () => {
+    await dispatchCommand("login", h.ops, h.ctx);
+    await dispatchCommand("logout", h.ops, h.ctx);
+    expect(h.workspace.login).toHaveBeenCalledOnce();
+    expect(h.workspace.logout).toHaveBeenCalledOnce();
   });
 
   it("falls unknown commands through to genuine Vim ex commands", async () => {

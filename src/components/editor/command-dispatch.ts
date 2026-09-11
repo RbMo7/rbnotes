@@ -37,6 +37,10 @@ export type WorkspaceOps = {
   updateSettings: (patch: Partial<Settings>) => void;
   /** Navigate to the Settings page -- what bare `:set` (no option given) opens. */
   openSettings: () => void;
+  /** Navigate to /login -- a no-op (middleware bounces back to "/") if already signed in. */
+  login: () => void;
+  /** Sign out of a Synced session; notifies instead for a Local-only one (nothing to log out of). */
+  logout: () => void;
 };
 
 export type CommandContext = {
@@ -151,6 +155,12 @@ export async function dispatchCommand(raw: string, ops: EditorOps, ctx: CommandC
       return;
     case "unshare":
       ctx.workspace.unshare();
+      return;
+    case "login":
+      ctx.workspace.login();
+      return;
+    case "logout":
+      ctx.workspace.logout();
       return;
     case "set":
       // Bare `:set` (no option) opens the Settings page -- `:set <option>`

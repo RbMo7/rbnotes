@@ -52,6 +52,7 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
       [":set nu|rnu|wrap|ts=N", "editor display options"],
       [":insp", "toggle inspector"],
       [":b", "toggle sidebar"],
+      [":login / :logout", "sign in or out"],
     ],
   },
   {

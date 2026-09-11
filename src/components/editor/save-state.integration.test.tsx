@@ -55,6 +55,8 @@ function renderCommandHarness() {
         unshare: () => {},
         updateSettings: () => {},
         openSettings: () => {},
+        login: () => {},
+        logout: () => {},
       },
     };
     return { markDirty: () => markDirty("note-1"), ctx };

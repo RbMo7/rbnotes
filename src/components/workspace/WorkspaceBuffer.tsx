@@ -32,6 +32,7 @@ import { useNotesQuery, useNotesMutations } from "@/lib/notes-query";
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
 import { saveSettingsAction } from "@/server/actions/settings";
 import { saveLocalSettings } from "@/lib/local-settings";
+import { useSignOut } from "@/lib/use-sign-out";
 import type { Settings } from "@/lib/schemas";
 
 /**
@@ -177,6 +178,7 @@ export function WorkspaceBuffer() {
   });
 
   const syncEnabled = useWorkspaceStore((s) => s.syncEnabled);
+  const signOut = useSignOut();
 
   const loadShareInfo = useCallback(() => {
     // Sharing needs a real account (createShareAction/getShareInfoAction
@@ -260,6 +262,14 @@ export function WorkspaceBuffer() {
     unshare: handleUnshare,
     updateSettings,
     openSettings: () => router.push("/settings"),
+    login: () => router.push("/login"),
+    logout: () => {
+      if (!syncEnabled) {
+        showNotify("LOGOUT: already local only -- nothing to sign out of", "error");
+        return;
+      }
+      signOut();
+    },
   };
 
   const commandContext: CommandContext = {
