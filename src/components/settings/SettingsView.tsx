@@ -7,6 +7,55 @@ import { useSignOut } from "@/lib/use-sign-out";
 import { useWorkspaceStore } from "@/lib/store";
 import type { Settings } from "@/lib/schemas";
 
+const THEME_OPTIONS: { value: Settings["theme"]; label: string }[] = [
+  { value: "hacker", label: "Hacker" },
+  { value: "dark", label: "Dark" },
+  { value: "light", label: "Light" },
+];
+
+/**
+ * A live preview, not a color name: the swatch itself carries
+ * `data-theme={value}`, so it renders under that theme's own [data-theme]
+ * CSS override (globals.css) and shows its real surface tone + accent
+ * color -- zero hardcoded hex duplicated here, same "components only ever
+ * read the CSS custom properties" rule the rest of the app already
+ * follows. The button chrome around it (border, label) stays in the
+ * *current* app theme's colors, not the swatch's own, so the selected
+ * state reads consistently no matter which swatch it's on.
+ */
+function ThemeSwatch({
+  value,
+  label,
+  selected,
+  onSelect,
+}: {
+  value: Settings["theme"];
+  label: string;
+  selected: boolean;
+  onSelect: (value: Settings["theme"]) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(value)}
+      aria-pressed={selected}
+      className={`flex flex-col items-center gap-space-1 px-space-2 py-space-2 border transition-colors ${
+        selected
+          ? "border-primary bg-surface-container-high"
+          : "border-outline-variant hover:border-outline"
+      }`}
+    >
+      <span
+        data-theme={value}
+        className="w-12 h-8 rounded-sm border border-outline-variant/40 bg-surface-container relative overflow-hidden"
+      >
+        <span className="absolute bottom-1 right-1 w-3 h-3 rounded-full bg-primary" />
+      </span>
+      <span className="font-label-sm text-label-sm text-on-surface">{label}</span>
+    </button>
+  );
+}
+
 function SettingRow({
   label,
   shortcut,
@@ -74,15 +123,17 @@ export function SettingsView({ email }: { email: string | null }) {
           Appearance
         </div>
         <SettingRow label="theme">
-          <select
-            value={settings.theme}
-            onChange={(e) => update({ theme: e.target.value as Settings["theme"] })}
-            className="bg-surface-container border border-outline-variant text-on-surface font-code-editor text-code-editor px-space-2 py-space-1 outline-none focus:border-primary"
-          >
-            <option value="hacker">Hacker</option>
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
+          <div className="flex items-center gap-space-2">
+            {THEME_OPTIONS.map((opt) => (
+              <ThemeSwatch
+                key={opt.value}
+                value={opt.value}
+                label={opt.label}
+                selected={settings.theme === opt.value}
+                onSelect={(theme) => update({ theme })}
+              />
+            ))}
+          </div>
         </SettingRow>
       </section>
 
