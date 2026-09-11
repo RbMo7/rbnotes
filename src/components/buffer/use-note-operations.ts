@@ -74,9 +74,17 @@ export function useNoteOperations({
         void (async () => {
           const existing = await getLocalNote(noteId);
           // Never pushed to the server -- nothing to sync, safe to forget
-          // outright. Already synced -- Tombstone it instead, so the
-          // delete itself has something to eventually push.
-          if (!existing || existing.syncedAt === null) {
+          // outright. Anything else -- known-synced, or no local record
+          // at all -- tombstones instead of purging. A missing record
+          // is ambiguous, not evidence of "never synced": warmAllNotes
+          // mirrors a fetched note into the Local store in the
+          // background (fire-and-forget, after first paint), so a
+          // delete landing before that write resolves would otherwise
+          // read `undefined` for a note that's actually already synced,
+          // and purging it here would be the wrong, irreversible call.
+          // tombstoneLocalNote is a safe no-op when there truly is no
+          // local record to tombstone.
+          if (existing?.syncedAt === null) {
             await purgeLocalNote(noteId);
           } else {
             await tombstoneLocalNote(noteId, now);

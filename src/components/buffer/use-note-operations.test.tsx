@@ -236,6 +236,19 @@ describe("useNoteOperations", () => {
     expect(mocks.purgeLocalNote).not.toHaveBeenCalled();
   });
 
+  it("regression: treats a missing Local store record as possibly-synced -- tombstones rather than purging", async () => {
+    // Default from beforeEach: getLocalNote resolves undefined, e.g. a
+    // note whose warmAllNotes mirror write hasn't landed yet.
+    const { result } = setup("some body");
+
+    act(() => {
+      result.current.delete(true);
+    });
+
+    await waitFor(() => expect(mocks.tombstoneLocalNote).toHaveBeenCalledWith(note.id, expect.any(String)));
+    expect(mocks.purgeLocalNote).not.toHaveBeenCalled();
+  });
+
   it("never calls the auth-gated delete/archive server actions for a Local-only session", async () => {
     useWorkspaceStore.setState({ syncEnabled: false });
     const { result: archiveResult } = setup("# Title\n\nsome body");
