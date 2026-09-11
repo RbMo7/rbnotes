@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono } from "next/font/google";
+import { SITE_URL } from "@/lib/site-url";
 import "./globals.css";
 
 const jetbrainsMono = JetBrains_Mono({
@@ -8,7 +9,6 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ["400", "500", "600", "700"],
 });
 
-const SITE_URL = "https://note.rbmo.xyz";
 const SITE_NAME = "RbNotes";
 const SITE_DESCRIPTION =
   "A minimalist, Vim-first notes app. Notes are buffers: :w to save, :q to leave, / to search -- no mouse required.";

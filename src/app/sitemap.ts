@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
-
-const SITE_URL = "https://note.rbmo.xyz";
+import { SITE_URL } from "@/lib/site-url";
 
 /**
  * Only the public auth flow belongs here -- everything else in the app is

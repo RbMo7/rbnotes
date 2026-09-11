@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
-
-const SITE_URL = "https://note.rbmo.xyz";
+import { SITE_URL } from "@/lib/site-url";
 
 /**
  * Everything under /notes, /settings, and /s/<token> is a signed-in user's

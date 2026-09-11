@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { SITE_URL } from "@/lib/site-url";
 import {
   forgotPasswordSchema,
   loginSchema,
@@ -51,9 +52,8 @@ export async function requestPasswordResetAction(input: unknown): Promise<AuthRe
   }
 
   const supabase = await createClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${siteUrl}/auth/callback?next=/reset`,
+    redirectTo: `${SITE_URL}/auth/callback?next=/reset`,
   });
   if (error) return { ok: false, message: mapAuthError(error.message) };
   return { ok: true };
