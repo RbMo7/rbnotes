@@ -28,7 +28,7 @@ import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useWorkspaceStore } from "@/lib/store";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { displayFilename, formatWordCount, shortHash } from "@/lib/format";
-import { useNotesQuery, useNotesMutations } from "@/lib/notes-query";
+import { useNotesQuery, useNotesMutations, useTogglePin } from "@/lib/notes-query";
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
 import { persistSettings } from "@/lib/save-settings";
 import { useSignOut } from "@/lib/use-sign-out";
@@ -49,6 +49,7 @@ export function WorkspaceBuffer() {
 
   const { data: notes } = useNotesQuery();
   const { updateNote } = useNotesMutations();
+  const togglePin = useTogglePin();
   const note = activeNoteId ? notes?.find((n) => n.id === activeNoteId) : undefined;
 
   const settings = useWorkspaceStore((s) => s.settings);
@@ -164,6 +165,23 @@ export function WorkspaceBuffer() {
     return () => useWorkspaceStore.getState().registerActiveSave(null);
   }, [write]);
 
+  // Clicking a `#tag` pill in the document (Editor's tagPillDecorations)
+  // jumps to the sidebar's Tags view, filtered and expanded to that tag.
+  // Desktop: the sidebar might be collapsed (including from onboarding's
+  // minimalistic-first-view default), so force it open -- the buffer stays
+  // mounted underneath, unlike Ctrl+T which only ever needs the request
+  // pulse since the sidebar's already the thing you're looking at. Mobile
+  // has no docked sidebar at all while a buffer is open (CONTEXT.md's List
+  // screen only exists on the Dashboard route), so jump home to it instead.
+  const handleTagClick = useCallback(
+    (tag: string) => {
+      useWorkspaceStore.getState().requestFocusTags(tag);
+      if (isDesktop) useWorkspaceStore.getState().setSidebarCollapsed(false);
+      else goHome();
+    },
+    [isDesktop, goHome],
+  );
+
   const showNotify = useCallback((message: string, tone: "info" | "error" = "info") => {
     setNotify(message);
     setNotifyTone(tone);
@@ -249,6 +267,7 @@ export function WorkspaceBuffer() {
   const workspaceOps: WorkspaceOps = {
     notify: (message) => showNotify(message, "error"),
     openHelp: () => setHelpOpen(true),
+    openCheatsheet: () => useWorkspaceStore.getState().setCheatsheetOpen(true),
     quit: () => {
       if (helpOpen) setHelpOpen(false);
       else if (inspectorOpen) setInspectorOpen(false);
@@ -270,7 +289,15 @@ export function WorkspaceBuffer() {
   };
 
   const commandContext: CommandContext = {
-    note: { save: write, isDirty: activeIsDirty, ...noteOps },
+    note: {
+      save: write,
+      isDirty: activeIsDirty,
+      ...noteOps,
+      togglePin: () => {
+        if (note) togglePin(note);
+        else showNotify("E486: no buffer to pin", "error");
+      },
+    },
     workspace: workspaceOps,
   };
 
@@ -331,6 +358,7 @@ export function WorkspaceBuffer() {
                 vimEnabled={vimEnabled}
                 onChange={handleChange}
                 onIntent={handleIntent}
+                onTagClick={handleTagClick}
               />
             </div>
             {cold && <BufferSkeleton />}
@@ -370,6 +398,7 @@ export function WorkspaceBuffer() {
             open={commandDockOpen}
             onClose={() => setCommandDockOpen(false)}
             onSubmit={handleCommandSubmit}
+            pinned={note.pinned}
           />
         )}
 

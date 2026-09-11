@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FilePlus, Pencil, Save, Share2, Trash2, X, type LucideIcon } from "lucide-react";
+import { FilePlus, Pencil, Pin, Save, Share2, Trash2, X, type LucideIcon } from "lucide-react";
 import { COMMAND } from "@/components/editor/command-dispatch";
 
 /**
@@ -16,10 +16,13 @@ export function MobileActionMenu({
   open,
   onClose,
   onSubmit,
+  pinned = false,
 }: {
   open: boolean;
   onClose: () => void;
   onSubmit: (raw: string) => void;
+  /** Whether the active note is currently pinned -- flips the Pin button's icon/label. */
+  pinned?: boolean;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState("");
@@ -91,6 +94,12 @@ export function MobileActionMenu({
           <ActionButton icon={Save} label="Save" onClick={() => runAndClose(COMMAND.save)} />
           <ActionButton icon={Pencil} label="Rename" onClick={() => setRenaming(true)} />
           <ActionButton icon={FilePlus} label="New note" onClick={() => runAndClose(COMMAND.newNote)} />
+          <ActionButton
+            icon={Pin}
+            label={pinned ? "Unpin" : "Pin"}
+            active={pinned}
+            onClick={() => runAndClose(COMMAND.pin)}
+          />
           <ActionButton icon={Share2} label="Share" onClick={() => runAndClose(COMMAND.share)} />
           <ActionButton icon={Trash2} label="Delete" danger onClick={() => runAndClose(COMMAND.delete)} />
         </div>
@@ -104,21 +113,23 @@ function ActionButton({
   label,
   onClick,
   danger,
+  active,
 }: {
   icon: LucideIcon;
   label: string;
   onClick: () => void;
   danger?: boolean;
+  active?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={`flex items-center gap-space-2 px-space-3 py-space-3 rounded bg-surface-container hover:bg-surface-container-high font-label-md text-label-md ${
-        danger ? "text-error" : "text-on-surface"
+        danger ? "text-error" : active ? "text-primary" : "text-on-surface"
       }`}
     >
-      <Icon size={16} strokeWidth={1.5} />
+      <Icon size={16} strokeWidth={1.5} fill={active ? "currentColor" : "none"} />
       {label}
     </button>
   );

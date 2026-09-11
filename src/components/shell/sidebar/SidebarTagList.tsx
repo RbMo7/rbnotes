@@ -61,6 +61,7 @@ export function SidebarTagList({
                     id={note.id}
                     title={note.title}
                     updatedAt={new Date(note.updatedAt)}
+                    pinned={note.pinned}
                     archived={note.archived}
                   />
                 ))}

@@ -5,7 +5,10 @@ import type { NoteRecord } from "@/lib/note-types";
 // a hash followed by word characters or hyphens, not preceded by another
 // word character (so heading markers `# Title` / `## Title` are excluded —
 // those always have a space after the hashes, this never does).
-const TAG_PATTERN = /(?<![\w#])#([a-zA-Z0-9][\w-]*)/g;
+// Exported so the editor's in-document tag-pill decoration (extensions.ts)
+// matches exactly the same tags this file computes summaries for -- one
+// pattern, never two that can drift apart.
+export const TAG_PATTERN = /(?<![\w#])#([a-zA-Z0-9][\w-]*)/g;
 
 export function extractTags(content: string): string[] {
   const matches = content.matchAll(TAG_PATTERN);

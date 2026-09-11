@@ -10,7 +10,9 @@ const GLOBAL_KEYS: [string, string][] = GLOBAL_SHORTCUTS.filter((s) => s.inGloba
   (s) => [s.label, s.description],
 );
 
-const SECTIONS: { title: string; keys: [string, string][] }[] = [
+// Exported so CheatsheetPopup (the footer's "Need help?" / `:cheat` popup)
+// shows the exact same reference, never a second table that can drift.
+export const SECTIONS: { title: string; keys: [string, string][] }[] = [
   {
     title: "NORMAL",
     keys: [
@@ -47,11 +49,13 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
       [":new", "create note"],
       [":rename <title>", "rename note"],
       [":delete", "archive note (:delete! deletes)"],
+      [":pin", "pin or unpin note"],
       [":share / :unshare", "create or revoke share link"],
       [":set", "open settings"],
       [":set nu|rnu|wrap|ts=N", "editor display options"],
       [":insp", "toggle inspector"],
       [":b", "toggle sidebar"],
+      [":cheat", "open this cheatsheet"],
       [":login / :logout", "sign in or out"],
     ],
   },

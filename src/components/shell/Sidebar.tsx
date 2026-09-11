@@ -187,10 +187,11 @@ export function Sidebar() {
           <Link
             href="/settings"
             data-active={pathname === "/settings"}
+            title="Settings"
+            aria-label="Settings"
             className="flex items-center gap-space-2 text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-colors data-[active=true]:text-on-surface min-w-0"
           >
             <Settings size={16} strokeWidth={1.5} />
-            <span className="truncate">Settings</span>
             <span className="font-label-sm text-label-sm text-outline shrink-0">[:set]</span>
           </Link>
         ) : (

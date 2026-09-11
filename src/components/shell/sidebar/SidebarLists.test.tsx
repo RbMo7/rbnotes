@@ -34,7 +34,10 @@ const NOTES: NoteRecord[] = [
   },
 ];
 
-vi.mock("@/lib/notes-query", () => ({ useNotesQuery: () => ({ data: NOTES }) }));
+vi.mock("@/lib/notes-query", () => ({
+  useNotesQuery: () => ({ data: NOTES }),
+  useTogglePin: () => vi.fn(),
+}));
 vi.mock("@/components/workspace/WorkspaceContext", () => ({
   useWorkspace: () => ({
     activeNoteId: null,

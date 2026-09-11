@@ -24,10 +24,12 @@ function makeHarness(options: { execVimEx?: boolean; saveResult?: boolean } = {}
     create: vi.fn(),
     rename: vi.fn(),
     delete: vi.fn(),
+    togglePin: vi.fn(),
   };
   const workspace = {
     notify: vi.fn(),
     openHelp: vi.fn(),
+    openCheatsheet: vi.fn(),
     quit: vi.fn(),
     toggleSidebar: vi.fn(),
     toggleInspector: vi.fn(),
@@ -144,15 +146,19 @@ describe("dispatchCommand", () => {
 
   it("routes overlay and workspace commands to their operations", async () => {
     await dispatchCommand("help", h.ops, h.ctx);
+    await dispatchCommand("cheat", h.ops, h.ctx);
     await dispatchCommand("insp", h.ops, h.ctx);
     await dispatchCommand("b", h.ops, h.ctx);
     await dispatchCommand("share", h.ops, h.ctx);
     await dispatchCommand("unshare", h.ops, h.ctx);
+    await dispatchCommand("pin", h.ops, h.ctx);
     expect(h.workspace.openHelp).toHaveBeenCalledOnce();
+    expect(h.workspace.openCheatsheet).toHaveBeenCalledOnce();
     expect(h.workspace.toggleInspector).toHaveBeenCalledOnce();
     expect(h.workspace.toggleSidebar).toHaveBeenCalledOnce();
     expect(h.workspace.share).toHaveBeenCalledOnce();
     expect(h.workspace.unshare).toHaveBeenCalledOnce();
+    expect(h.note.togglePin).toHaveBeenCalledOnce();
   });
 
   it(":set maps app display options onto settings", async () => {

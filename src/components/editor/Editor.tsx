@@ -14,7 +14,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { searchKeymap } from "@codemirror/search";
 import { vim, getCM, Vim } from "@replit/codemirror-vim";
 import { rbnotesTheme, rbnotesMarkdownHighlight } from "@/components/editor/rbnotes-theme";
-import { rbnotesMarkdown, lineNumberGutter } from "@/components/editor/extensions";
+import { rbnotesMarkdown, lineNumberGutter, tagPillDecorations } from "@/components/editor/extensions";
 import { livePreview, setPreviewMode } from "@/components/editor/live-preview";
 import { matchGlobalShortcut, type Intent } from "@/components/editor/shortcuts";
 import { isH1Line } from "@/lib/markdown-title";
@@ -57,6 +57,8 @@ type Props = {
   // The only bridge from the editor to app actions. Read-only callers (the
   // shared-note view) simply omit it -- no no-op callback wall.
   onIntent?: (intent: Intent) => void;
+  /** Fired with the lowercased tag text (no `#`) when a `.cm-tag-pill` is clicked. */
+  onTagClick?: (tag: string) => void;
 };
 
 function mapVimMode(raw: string | undefined): VimMode {
@@ -92,6 +94,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     readOnly = false,
     onChange,
     onIntent,
+    onTagClick,
   },
   ref,
 ) {
@@ -136,6 +139,8 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
   onChangeRef.current = onChange;
   const onIntentRef = useRef(onIntent);
   onIntentRef.current = onIntent;
+  const onTagClickRef = useRef(onTagClick);
+  onTagClickRef.current = onTagClick;
 
   /**
    * Must be called after *every* `view.setState(...)` (not just once at
@@ -304,6 +309,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       drawSelection(),
       rbnotesMarkdown,
       rbnotesMarkdownHighlight,
+      tagPillDecorations,
       // A note's title is its first `# heading` (lib/markdown-title.ts) --
       // there's no separate title field to fill in, which isn't obvious
       // the first time a blank "untitled" note opens. CodeMirror's own
@@ -313,13 +319,23 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       // longer "".
       placeholder("# Title\n\nStart typing — the first # heading becomes the note's title."),
       livePreview(previewModeRef),
-      gutterCompartment.of(lineNumberGutter(readOnly ? "absolute" : settings.lineNumbers)),
+      gutterCompartment.of(
+        lineNumberGutter(!vimEnabled ? "off" : readOnly ? "absolute" : settings.lineNumbers),
+      ),
       wrapCompartment.of(settings.wordWrap ? EditorView.lineWrapping : []),
       tabSizeCompartment.of(EditorState.tabSize.of(settings.tabSize)),
       themeCompartment.of(rbnotesTheme(initialMode)),
       EditorState.readOnly.of(readOnly),
       EditorView.editable.of(!readOnly),
       updateListener,
+      EditorView.domEventHandlers({
+        click(event) {
+          const pill = (event.target as HTMLElement | null)?.closest(".cm-tag-pill");
+          if (!pill?.textContent) return false;
+          onTagClickRef.current?.(pill.textContent.replace(/^#/, "").toLowerCase());
+          return true;
+        },
+      }),
       keymap.of([indentWithTab, ...historyKeymap, ...searchKeymap, ...defaultKeymap]),
     ];
 
@@ -501,7 +517,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     view.dispatch({
       effects: [
         gutterCompartment.reconfigure(
-          lineNumberGutter(readOnly ? "absolute" : settings.lineNumbers),
+          lineNumberGutter(!vimEnabled ? "off" : readOnly ? "absolute" : settings.lineNumbers),
         ),
         wrapCompartment.reconfigure(settings.wordWrap ? EditorView.lineWrapping : []),
         tabSizeCompartment.reconfigure(EditorState.tabSize.of(settings.tabSize)),

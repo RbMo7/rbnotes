@@ -372,3 +372,30 @@ export function useCreateNote() {
     return note.id;
   }, [addNote]);
 }
+
+/**
+ * `:pin` / the hover pin icon (NoteListItem) -- toggles a note's `pinned`
+ * flag from anywhere it's listed, not just the active buffer. Same
+ * optimistic-cache + Local store mirror + best-effort server push shape as
+ * useNoteOperations' rename/delete, just keyed off the note object a list
+ * row already has in hand instead of the active noteId.
+ */
+export function useTogglePin() {
+  const { updateNote } = useNotesMutations();
+
+  return useCallback(
+    (note: Pick<NoteRecord, "id" | "pinned" | "archived">) => {
+      const pinned = !note.pinned;
+      updateNote(note.id, { pinned });
+      void (async () => {
+        const existing = await getLocalNote(note.id);
+        if (!existing) return;
+        await setLocalNote({ ...existing, pinned, editedAt: new Date().toISOString() });
+      })();
+      if (useWorkspaceStore.getState().syncEnabled) {
+        setNoteFlagsAction({ noteId: note.id, pinned, archived: note.archived }).catch(() => {});
+      }
+    },
+    [updateNote],
+  );
+}

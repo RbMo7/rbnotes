@@ -1,5 +1,6 @@
 "use client";
 
+import { HelpCircle } from "lucide-react";
 import { useWorkspaceStore, type VimMode } from "@/lib/store";
 import { formatRelativeCreated } from "@/lib/format";
 
@@ -22,6 +23,7 @@ export function StatusBar({ filename }: { filename: string | null }) {
   const cursorLine = useWorkspaceStore((s) => s.cursorLine);
   const cursorCol = useWorkspaceStore((s) => s.cursorCol);
   const bufferInfo = useWorkspaceStore((s) => s.activeBufferInfo);
+  const setCheatsheetOpen = useWorkspaceStore((s) => s.setCheatsheetOpen);
 
   return (
     <footer className="fixed bottom-0 left-0 right-0 h-status-bar-height bg-surface-container-high border-t border-outline-variant/40 z-50 flex items-center justify-between px-space-4 font-label-sm text-label-sm">
@@ -73,6 +75,13 @@ export function StatusBar({ filename }: { filename: string | null }) {
         <span>|</span>
         <span className="text-outline">100%</span>
       </div>
+      <button
+        onClick={() => setCheatsheetOpen(true)}
+        className="flex items-center gap-space-1 text-on-surface-variant hover:text-primary shrink-0"
+      >
+        <HelpCircle size={14} strokeWidth={1.5} />
+        <span className="hidden sm:inline">Need help?</span>
+      </button>
     </footer>
   );
 }

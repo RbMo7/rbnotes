@@ -387,6 +387,35 @@
   }
 }
 
+/* The boot loader (AppShell) -- shown while the first-run-onboarding
+   decision is being made (its visibility is React-state-driven, not timed
+   by these), so nothing ever flashes the Dashboard first. Purely
+   decorative movement while it's up; prefers-reduced-motion below
+   collapses all three to effectively instant. */
+@keyframes rbnotes-boot-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes rbnotes-boot-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes rbnotes-boot-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -18,7 +18,10 @@ const NOTES: NoteRecord[] = [
 const isDesktopRef = { current: true as boolean | null };
 const createAndOpenNote = vi.fn();
 
-vi.mock("@/lib/notes-query", () => ({ useNotesQuery: () => ({ data: NOTES }) }));
+vi.mock("@/lib/notes-query", () => ({
+  useNotesQuery: () => ({ data: NOTES }),
+  useTogglePin: () => vi.fn(),
+}));
 vi.mock("@/lib/use-is-desktop", () => ({ useIsDesktop: () => isDesktopRef.current }));
 vi.mock("@/components/workspace/WorkspaceContext", () => ({
   useWorkspace: () => ({

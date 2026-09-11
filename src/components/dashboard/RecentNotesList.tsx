@@ -27,7 +27,10 @@ export function RecentNotesList() {
     () =>
       notes
         .filter((n) => !n.archived)
-        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .sort((a, b) => {
+          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        })
         .slice(0, RECENT_LIMIT),
     [notes],
   );

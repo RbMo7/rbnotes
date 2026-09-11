@@ -44,10 +44,12 @@ function renderCommandHarness() {
         create: () => {},
         rename: () => {},
         delete: () => {},
+        togglePin: () => {},
       },
       workspace: {
         notify: () => {},
         openHelp: () => {},
+        openCheatsheet: () => {},
         quit: () => {},
         toggleSidebar: () => {},
         toggleInspector: () => {},
