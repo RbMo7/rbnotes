@@ -5,7 +5,9 @@
    design system ("Vim Terminal Minimalist"). Dark-only.
    ============================================================ */
 @theme {
-  /* Colors -- the "Hacker" theme (see docs/research/theme-palette.md §4.1).
+  /* Colors -- the "Hacker" theme. Kept as the app's original neon-green
+     identity (docs/research/theme-palette.md §4.1 proposed a desaturated
+     cyan instead; reverted per direct feedback -- green is Hacker's look).
      This is also the base/default palette: rendered wherever no
      [data-theme="dark"|"light"] override applies (auth pages, before
      hydration, or an explicit "hacker" choice), per the theme-support
@@ -23,23 +25,23 @@
   --color-surface-variant: #333537;
 
   --color-on-surface: #e2e2e5;
-  --color-on-surface-variant: #a8b0b0;
+  --color-on-surface-variant: #bccbb9;
   --color-inverse-surface: #e2e2e5;
   --color-inverse-on-surface: #2f3133;
 
-  --color-outline: #85918f;
-  --color-outline-variant: #3a4142;
+  --color-outline: #869585;
+  --color-outline-variant: #3d4a3d;
 
-  --color-primary: #4bd0d0;
-  --color-on-primary: #003636;
-  --color-primary-container: #1f9e9e;
-  --color-on-primary-container: #d8f7f7;
-  --color-primary-fixed: #7ee5e5;
-  --color-primary-fixed-dim: #4bd0d0;
-  --color-on-primary-fixed: #002020;
-  --color-on-primary-fixed-variant: #0a5050;
-  --color-inverse-primary: #0a7a7a;
-  --color-surface-tint: #4bd0d0;
+  --color-primary: #4be277;
+  --color-on-primary: #003915;
+  --color-primary-container: #22c55e;
+  --color-on-primary-container: #004b1e;
+  --color-primary-fixed: #6bff8f;
+  --color-primary-fixed-dim: #4ae176;
+  --color-on-primary-fixed: #002109;
+  --color-on-primary-fixed-variant: #005321;
+  --color-inverse-primary: #006e2f;
+  --color-surface-tint: #4ae176;
 
   --color-secondary: #b9c8de;
   --color-on-secondary: #233143;
