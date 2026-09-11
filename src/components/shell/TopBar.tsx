@@ -1,11 +1,12 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
-import { GitCommitHorizontal, PanelLeft, User } from "lucide-react";
+import { ArrowLeft, GitCommitHorizontal, PanelLeft, User } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { useIsDesktop } from "@/lib/use-is-desktop";
 import { useNotesQuery } from "@/lib/notes-query";
 import { displayFilename } from "@/lib/format";
 import { signOutAction } from "@/server/actions/auth";
@@ -17,6 +18,8 @@ const SECTION_TITLES: Record<string, string> = {
 
 export function TopBar({ email }: { email: string }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const isDesktop = useIsDesktop();
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useWorkspaceStore((s) => s.toggleSidebar);
   const toggleInspector = useWorkspaceStore((s) => s.toggleInspector);
@@ -41,20 +44,43 @@ export function TopBar({ email }: { email: string }) {
   const activeNote = activeNoteId ? notes?.find((n) => n.id === activeNoteId) : undefined;
   const title = activeNote ? displayFilename(activeNote.title) : (SECTION_TITLES[pathname] ?? "");
 
+  // Below the mobile breakpoint there's no sidebar to toggle -- its browse
+  // role lives in the Dashboard route's List screen instead (CONTEXT.md).
+  // A note open there is the Note screen, and this button becomes its one
+  // way back to the List screen rather than an overlay toggle; with no
+  // note open the List screen already shows everything, so there's nothing
+  // for a leading button to do.
+  const mobileNoteOpen = isDesktop === false && !!activeNote;
+  const showLeadingButton = isDesktop !== false || mobileNoteOpen;
+
+  // Same `left-sidebar-width` offset as always for every width Sidebar
+  // still renders at (isDesktop !== false, including the sub-1024px band
+  // where it's a translated-out overlay, not docked -- untouched here);
+  // only genuine mobile (isDesktop === false, where Sidebar renders nothing
+  // at all) skips reserving that space.
+  const headerOffsetClass =
+    isDesktop === false ? "left-0" : "left-sidebar-width data-[collapsed=true]:left-0";
+
   return (
     <header
       data-collapsed={collapsed}
-      className="fixed top-0 left-sidebar-width right-0 h-header-height bg-surface/90 border-b border-outline-variant/30 z-30 flex items-center justify-between px-space-6 backdrop-blur-sm transition-[left] duration-150 data-[collapsed=true]:left-0"
+      className={`fixed top-0 right-0 h-header-height bg-surface/90 border-b border-outline-variant/30 z-30 flex items-center justify-between px-space-6 backdrop-blur-sm transition-[left] duration-150 ${headerOffsetClass}`}
     >
       <div className="flex items-center gap-space-4 min-w-0">
-        <button
-          onClick={toggleSidebar}
-          className="text-on-surface-variant hover:text-on-surface transition-colors -ml-space-2 p-space-1 shrink-0"
-          title="Toggle sidebar [Ctrl+B]"
-          aria-label="Toggle sidebar"
-        >
-          <PanelLeft size={16} strokeWidth={1.5} />
-        </button>
+        {showLeadingButton && (
+          <button
+            onClick={mobileNoteOpen ? () => router.push("/") : toggleSidebar}
+            className="text-on-surface-variant hover:text-on-surface transition-colors -ml-space-2 p-space-1 shrink-0"
+            title={mobileNoteOpen ? "Back to notes" : "Toggle sidebar [Ctrl+B]"}
+            aria-label={mobileNoteOpen ? "Back to notes" : "Toggle sidebar"}
+          >
+            {mobileNoteOpen ? (
+              <ArrowLeft size={16} strokeWidth={1.5} />
+            ) : (
+              <PanelLeft size={16} strokeWidth={1.5} />
+            )}
+          </button>
+        )}
         <span
           className="text-primary font-headline-md text-headline-md tracking-tight truncate"
           title={title}

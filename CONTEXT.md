@@ -1,13 +1,13 @@
 # rbnotes
 
-A vim-flavored notes app: notes are buffers, buffers are edited in a CodeMirror vim engine, and everything the user sees comes from one client-side cache of notes.
+A vim-flavored notes app: notes are buffers, and everything the user sees comes from one client-side cache of notes. At desktop widths, buffers are edited in a CodeMirror vim engine; below the mobile breakpoint, the same buffers are edited in a plain, non-modal surface instead — mobile is a different presentation of the same Workspace, never a separate app.
 
 ## Language
 
 ### Search
 
 **Local search**:
-In-buffer search triggered by `/`, owned entirely by the vim engine — the app never intercepts it. Incremental: jumps to matches while the pattern is typed, `n`/`N` to repeat, `E486` when nothing matches.
+In-buffer search triggered by `/`, owned entirely by the vim engine — the app never intercepts it. Incremental: jumps to matches while the pattern is typed, `n`/`N` to repeat, `E486` when nothing matches. Has no mobile equivalent: without a vim engine there is nothing to own it, so mobile relies on Global search only.
 _Avoid_: find, slash search, vim search
 
 **Global search**:
@@ -47,3 +47,17 @@ _Avoid_: save button, manual save
 **Command dock**:
 The `:`-command surface of the shell (writes, new notes, etc.).
 _Avoid_: command bar, terminal
+
+### Mobile
+
+**Action menu**:
+Mobile's presentation of the Command dock's actions (save, rename, new, delete, share) as plain labeled buttons — no `:` syntax, no chip grid, and no vim-only settings like `:set rnu`. Same actions as the Command dock, different surface.
+_Avoid_: mobile command dock
+
+**List screen**:
+Mobile's no-buffer-open state: search, tags, and every note in one full-screen view. Merges the Dashboard's landing role with the sidebar's browse role, which stay separate surfaces on desktop.
+_Avoid_: mobile dashboard, mobile sidebar
+
+**Note screen**:
+Mobile's one-buffer-open state, reached by tapping a note from the List screen; back is an ordinary navigation to the List screen, the same Dashboard-route transition the wordmark already triggers. Presented within the same persistent Workspace shell as desktop — the shell itself never remounts, and warmed buffers stay warm across it.
+_Avoid_: mobile buffer view, note page

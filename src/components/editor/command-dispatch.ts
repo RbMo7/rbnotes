@@ -47,6 +47,20 @@ export type CommandContext = {
 export type DeleteMode = "archive" | "purge";
 
 /**
+ * The raw command strings CommandDock (desktop) and MobileActionMenu
+ * (mobile) both submit here -- named once so the two surfaces can't drift
+ * apart on the actual command vocabulary `dispatchCommand`'s switch below
+ * understands.
+ */
+export const COMMAND = {
+  save: "w",
+  newNote: "new",
+  delete: "delete",
+  share: "share",
+  renamePrefix: "rename ",
+} as const;
+
+/**
  * The archive-vs-delete policy, in the command layer: an empty buffer is
  * purged (there is nothing worth archiving), as is any buffer the user
  * forces with `:delete!`. Everything else is archived. Lives here so the

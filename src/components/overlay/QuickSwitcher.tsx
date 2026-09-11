@@ -2,12 +2,13 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMemo, useState } from "react";
-import { FileText, Archive } from "lucide-react";
+import { FileText, Archive, X } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
 import { displayFilename } from "@/lib/format";
 import { formatSidebarTimestamp } from "@/lib/grouping";
 import { useNotesQuery } from "@/lib/notes-query";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { RESPONSIVE_DIALOG_CONTENT } from "@/components/overlay/dialog-classes";
 
 /**
  * Ctrl+P. Per the design system spec: centered at 20% viewport height,
@@ -46,7 +47,7 @@ export function QuickSwitcher() {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 z-[60]" />
         <Dialog.Content
-          className="fixed left-1/2 top-[20vh] -translate-x-1/2 w-[90vw] max-w-[38rem] bg-surface-container border border-outline-variant z-[61] font-code-editor text-code-editor"
+          className={RESPONSIVE_DIALOG_CONTENT}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "j")) {
               e.preventDefault();
@@ -61,7 +62,7 @@ export function QuickSwitcher() {
           }}
         >
           <Dialog.Title className="sr-only">Quick switcher</Dialog.Title>
-          <div className="flex items-center gap-space-2 px-space-4 py-space-3 border-b border-outline-variant">
+          <div className="flex items-center gap-space-2 px-space-4 py-space-3 border-b border-outline-variant shrink-0">
             <span className="text-primary font-bold">&gt;</span>
             <input
               autoFocus
@@ -75,8 +76,13 @@ export function QuickSwitcher() {
               aria-label="Search notes"
             />
             <span className="w-2 h-4 bg-primary inline-block animate-pulse" />
+            <Dialog.Close asChild>
+              <button aria-label="Close quick switcher" className="sm:hidden text-on-surface-variant hover:text-on-surface p-space-1 -mr-space-1">
+                <X size={18} strokeWidth={1.5} />
+              </button>
+            </Dialog.Close>
           </div>
-          <div role="listbox" className="max-h-80 overflow-y-auto py-space-2">
+          <div role="listbox" className="flex-1 sm:flex-none sm:max-h-80 overflow-y-auto py-space-2">
             {filtered.length === 0 && (
               <p className="px-space-4 py-space-2 font-body-sm text-body-sm text-outline/50">
                 ~ no matches

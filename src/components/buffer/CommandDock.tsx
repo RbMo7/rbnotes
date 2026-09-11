@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { COMMAND } from "@/components/editor/command-dispatch";
 
 type CommandChip = { label: string; full: string; danger?: boolean };
 
 const COMMAND_CHIPS: CommandChip[] = [
-  { label: ":w", full: "w" },
-  { label: ":rename <title>", full: "rename " },
-  { label: ":new", full: "new" },
+  { label: ":w", full: COMMAND.save },
+  { label: ":rename <title>", full: COMMAND.renamePrefix },
+  { label: ":new", full: COMMAND.newNote },
   { label: ":wq", full: "wq" },
-  { label: ":delete", full: "delete", danger: true },
-  { label: ":share", full: "share" },
+  { label: ":delete", full: COMMAND.delete, danger: true },
+  { label: ":share", full: COMMAND.share },
   { label: ":set rnu", full: "set rnu" },
   { label: ":help", full: "help" },
 ];

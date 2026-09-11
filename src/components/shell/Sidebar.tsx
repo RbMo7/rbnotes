@@ -6,19 +6,30 @@ import { usePathname } from "next/navigation";
 import { Settings } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
+import { useIsDesktop } from "@/lib/use-is-desktop";
 import { SidebarLists } from "@/components/shell/sidebar/SidebarLists";
 
+/**
+ * Below the mobile breakpoint (the same `useIsDesktop()` seam everything
+ * else here uses) this same browse role -- search, tags, every note --
+ * lives in the Dashboard route's List screen instead (CONTEXT.md), so
+ * Sidebar doesn't render at all there. At every other width this is
+ * unchanged from before that split existed.
+ */
 export function Sidebar() {
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);
   const mobileOpen = useWorkspaceStore((s) => s.mobileSidebarOpen);
   const setMobileOpen = useWorkspaceStore((s) => s.setMobileSidebarOpen);
   const pathname = usePathname();
   const { createAndOpenNote } = useWorkspace();
+  const isDesktop = useIsDesktop();
 
   const handleNewNote = () => {
     createAndOpenNote();
     setMobileOpen(false);
   };
+
+  if (isDesktop === false) return null;
 
   return (
     <>

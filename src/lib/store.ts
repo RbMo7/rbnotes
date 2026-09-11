@@ -36,9 +36,9 @@ type WorkspaceState = {
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
 
-  // Below 1024px: the sidebar is an overlay drawer instead of docked
-  // (design system's own breakpoint rule), governed independently so
-  // opening it never shifts buffer content.
+  // Below 1024px: Sidebar (when it renders at all -- see its own doc
+  // comment) is an overlay drawer instead of docked, governed independently
+  // so opening it never shifts buffer content.
   mobileSidebarOpen: boolean;
   setMobileSidebarOpen: (open: boolean) => void;
 

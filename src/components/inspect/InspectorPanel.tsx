@@ -1,6 +1,8 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { X } from "lucide-react";
+import { useIsDesktop } from "@/lib/use-is-desktop";
 
 export type ShareViewer = { email: string; viewCount: number; lastViewedAt: string };
 
@@ -18,6 +20,10 @@ function formatViewerTime(iso: string): string {
  * an actual panel behind it. Purely presentational: WorkspaceBuffer owns
  * the share/viewer state so `:share`/`:unshare` and this panel's buttons
  * stay in sync.
+ *
+ * Below the mobile breakpoint this renders as a full-screen overlay instead
+ * of an inline side panel -- a fixed w-72 would squeeze the buffer down to
+ * nothing on a phone-width screen. Above it, this is unchanged.
  */
 export function InspectorPanel({
   open,
@@ -38,10 +44,12 @@ export function InspectorPanel({
   onUnshare: () => void;
   onCopy: () => void;
 }) {
+  const isDesktop = useIsDesktop();
+
   if (!open) return null;
 
-  return (
-    <aside className="w-72 shrink-0 bg-surface-container-low border-l border-outline-variant/30 flex flex-col h-full overflow-y-auto">
+  const body = (
+    <>
       <div className="h-14 px-space-4 border-b border-outline-variant/30 flex items-center justify-between shrink-0">
         <span className="font-label-md text-label-md text-on-surface uppercase tracking-wider">
           Inspector
@@ -115,6 +123,29 @@ export function InspectorPanel({
           </div>
         )}
       </div>
+    </>
+  );
+
+  if (isDesktop === false) return <MobileInspectorOverlay onClose={onClose}>{body}</MobileInspectorOverlay>;
+
+  return (
+    <aside className="w-72 shrink-0 bg-surface-container-low border-l border-outline-variant/30 flex flex-col h-full overflow-y-auto">
+      {body}
     </aside>
+  );
+}
+
+function MobileInspectorOverlay({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  return (
+    <>
+      <button
+        aria-label="Close inspector"
+        onClick={onClose}
+        className="fixed inset-0 bg-black/50 z-30"
+      />
+      <aside className="fixed inset-x-0 bottom-0 top-1/4 z-40 bg-surface-container-low border-t border-outline-variant/30 rounded-t-xl flex flex-col overflow-y-auto">
+        {children}
+      </aside>
+    </>
   );
 }

@@ -15,8 +15,11 @@ const NOTES: NoteRecord[] = [
   },
 ];
 
+const isDesktopRef = { current: true as boolean | null };
+
 vi.mock("next/navigation", () => ({ usePathname: () => "/notes/1" }));
 vi.mock("@/lib/notes-query", () => ({ useNotesQuery: () => ({ data: NOTES }) }));
+vi.mock("@/lib/use-is-desktop", () => ({ useIsDesktop: () => isDesktopRef.current }));
 vi.mock("@/components/workspace/WorkspaceContext", () => ({
   useWorkspace: () => ({
     activeNoteId: "1",
@@ -28,7 +31,10 @@ vi.mock("@/components/workspace/WorkspaceContext", () => ({
 
 import { Sidebar } from "@/components/shell/Sidebar";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  isDesktopRef.current = true;
+});
 
 describe("Sidebar", () => {
   it("keeps the wordmark and new-note action mounted -- the Tags drill-down overlays only the list region below them", () => {
@@ -38,5 +44,11 @@ describe("Sidebar", () => {
     expect(screen.getByText("RbNotes")).toBeTruthy();
     expect(screen.getByText("+ New Note")).toBeTruthy();
     expect(screen.getByText("project")).toBeTruthy();
+  });
+
+  it("renders nothing on mobile -- its browse role lives in the Dashboard route's List screen instead", () => {
+    isDesktopRef.current = false;
+    const { container } = render(<Sidebar />);
+    expect(container.firstChild).toBeNull();
   });
 });

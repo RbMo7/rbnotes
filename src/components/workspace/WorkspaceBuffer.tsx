@@ -6,6 +6,8 @@ import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { VimStatuslineDock } from "@/components/buffer/VimStatuslineDock";
 import { QuickActionsStrip } from "@/components/buffer/QuickActionsStrip";
 import { CommandDock } from "@/components/buffer/CommandDock";
+import { MobileActionMenu } from "@/components/buffer/MobileActionMenu";
+import { MoreHorizontal } from "lucide-react";
 import { HelpBuffer } from "@/components/overlay/HelpBuffer";
 import { EmptyBuffer } from "@/components/buffer/EmptyBuffer";
 import { InspectorPanel, type ShareViewer } from "@/components/inspect/InspectorPanel";
@@ -330,22 +332,30 @@ export function WorkspaceBuffer() {
           </div>
         </div>
 
-        <CommandDock
-          open={commandDockOpen}
-          onClose={() => {
-            setCommandDockOpen(false);
-            editorRef.current?.focus();
-          }}
-          onSubmit={handleCommandSubmit}
-        />
+        {vimEnabled ? (
+          <CommandDock
+            open={commandDockOpen}
+            onClose={() => {
+              setCommandDockOpen(false);
+              editorRef.current?.focus();
+            }}
+            onSubmit={handleCommandSubmit}
+          />
+        ) : (
+          <MobileActionMenu
+            open={commandDockOpen}
+            onClose={() => setCommandDockOpen(false)}
+            onSubmit={handleCommandSubmit}
+          />
+        )}
 
         {!vimEnabled && !commandDockOpen && (
           <button
             onClick={() => setCommandDockOpen(true)}
-            className="fixed bottom-[calc(var(--spacing-status-bar-height)+1rem)] right-4 z-20 w-10 h-10 rounded-full bg-primary text-on-primary font-headline-sm text-headline-sm font-bold flex items-center justify-center shadow-lg lg:hidden"
-            aria-label="Open command line"
+            className="fixed bottom-[calc(var(--spacing-status-bar-height)+1rem)] right-4 z-20 w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-lg lg:hidden"
+            aria-label="Open actions"
           >
-            :
+            <MoreHorizontal size={20} strokeWidth={2} />
           </button>
         )}
       </div>

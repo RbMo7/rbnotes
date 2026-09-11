@@ -2,12 +2,13 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText, X } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
 import { displayFilename } from "@/lib/format";
 import { useNotesQuery } from "@/lib/notes-query";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useGlobalSearch } from "@/components/overlay/useGlobalSearch";
+import { RESPONSIVE_DIALOG_CONTENT } from "@/components/overlay/dialog-classes";
 
 function highlight(text: string, query: string) {
   if (!query) return text;
@@ -54,9 +55,9 @@ export function SearchPalette() {
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 z-[60]" />
-        <Dialog.Content className="fixed left-1/2 top-[20vh] -translate-x-1/2 w-[90vw] max-w-[38rem] bg-surface-container border border-outline-variant shadow-2xl z-[61] font-code-editor text-code-editor">
+        <Dialog.Content className={`${RESPONSIVE_DIALOG_CONTENT} shadow-2xl`}>
           <Dialog.Title className="sr-only">Search notes</Dialog.Title>
-          <div className="flex items-center gap-space-2 px-space-4 py-space-3 border-b border-outline-variant">
+          <div className="flex items-center gap-space-2 px-space-4 py-space-3 border-b border-outline-variant shrink-0">
             <span className="text-primary font-bold">/</span>
             <input
               autoFocus
@@ -67,8 +68,13 @@ export function SearchPalette() {
               aria-label="Search"
             />
             {loading && <span className="text-outline text-label-sm font-label-sm">…</span>}
+            <Dialog.Close asChild>
+              <button aria-label="Close search" className="sm:hidden text-on-surface-variant hover:text-on-surface p-space-1 -mr-space-1">
+                <X size={18} strokeWidth={1.5} />
+              </button>
+            </Dialog.Close>
           </div>
-          <div className="max-h-96 overflow-y-auto py-space-2">
+          <div className="flex-1 sm:flex-none sm:max-h-96 overflow-y-auto py-space-2">
             {query && !loading && results.length === 0 && (
               <p className="px-space-4 py-space-2 font-body-sm text-body-sm text-outline/50">
                 ~ no matches
