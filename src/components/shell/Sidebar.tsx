@@ -10,6 +10,8 @@ import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { SidebarLists } from "@/components/shell/sidebar/SidebarLists";
 import { LocalOnlyBadge } from "@/components/shell/LocalOnlyBadge";
+import { persistSettings } from "@/lib/save-settings";
+import type { Settings as SettingsShape } from "@/lib/schemas";
 
 const MIN_SIDEBAR_WIDTH = 200;
 const MAX_SIDEBAR_WIDTH = 420;
@@ -66,6 +68,43 @@ function useSidebarResize() {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   }, []);
+}
+
+const THEME_ORDER: SettingsShape["theme"][] = ["hacker", "dark", "light"];
+const THEME_LABEL: Record<SettingsShape["theme"], string> = {
+  hacker: "Hacker",
+  dark: "Dark",
+  light: "Light",
+};
+
+/**
+ * Quick-toggle for the theme-support spec: cycles Hacker -> Dark -> Light
+ * -> Hacker on each click, no Settings-page trip required. Styled as a
+ * bracket-command chip (`[theme]`), the same terminal-voice language as
+ * `[:set]`/`[^N]` elsewhere in this shell, not a color-swatch picker.
+ */
+function ThemeToggle() {
+  const settings = useWorkspaceStore((s) => s.settings);
+  const syncEnabled = useWorkspaceStore((s) => s.syncEnabled);
+  const updateStore = useWorkspaceStore((s) => s.updateSettings);
+  const theme = settings.theme;
+
+  const cycle = () => {
+    const next = THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length];
+    updateStore({ theme: next });
+    void persistSettings({ ...settings, theme: next }, syncEnabled);
+  };
+
+  return (
+    <button
+      onClick={cycle}
+      title="Cycle theme"
+      className="flex items-center gap-space-1 font-label-sm text-label-sm text-outline hover:text-on-surface transition-colors shrink-0"
+    >
+      <span className="text-primary">[theme]</span>
+      <span>{THEME_LABEL[theme]}</span>
+    </button>
+  );
 }
 
 /**
@@ -133,20 +172,21 @@ export function Sidebar() {
 
       <SidebarLists />
 
-      <div className="h-12 px-space-4 border-t border-outline-variant/30 flex items-center shrink-0 bg-surface-container-low">
+      <div className="h-12 px-space-4 border-t border-outline-variant/30 flex items-center justify-between gap-space-3 shrink-0 bg-surface-container-low">
         {syncEnabled ? (
           <Link
             href="/settings"
             data-active={pathname === "/settings"}
-            className="flex items-center gap-space-2 text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-colors data-[active=true]:text-on-surface"
+            className="flex items-center gap-space-2 text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-colors data-[active=true]:text-on-surface min-w-0"
           >
             <Settings size={16} strokeWidth={1.5} />
-            <span>Settings</span>
-            <span className="font-label-sm text-label-sm text-outline">[:set]</span>
+            <span className="truncate">Settings</span>
+            <span className="font-label-sm text-label-sm text-outline shrink-0">[:set]</span>
           </Link>
         ) : (
           <LocalOnlyBadge />
         )}
+        <ThemeToggle />
       </div>
 
       <div

@@ -2,8 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { saveSettingsAction } from "@/server/actions/settings";
-import { saveLocalSettings } from "@/lib/local-settings";
+import { persistSettings } from "@/lib/save-settings";
 import { useSignOut } from "@/lib/use-sign-out";
 import { useWorkspaceStore } from "@/lib/store";
 import type { Settings } from "@/lib/schemas";
@@ -51,12 +50,12 @@ export function SettingsView({ email }: { email: string | null }) {
     updateStore(patch);
     const next = { ...settings, ...patch };
     if (!syncEnabled) {
-      saveLocalSettings(next);
+      void persistSettings(next, false);
       return;
     }
     setSaved(false);
     startTransition(async () => {
-      await saveSettingsAction(next);
+      await persistSettings(next, true);
       setSaved(true);
     });
   };
@@ -69,6 +68,23 @@ export function SettingsView({ email }: { email: string | null }) {
           {saved ? "[Saved]" : "[Saving...]"}
         </span>
       </div>
+
+      <section className="bg-surface-container-high">
+        <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">
+          Appearance
+        </div>
+        <SettingRow label="theme">
+          <select
+            value={settings.theme}
+            onChange={(e) => update({ theme: e.target.value as Settings["theme"] })}
+            className="bg-surface-container border border-outline-variant text-on-surface font-code-editor text-code-editor px-space-2 py-space-1 outline-none focus:border-primary"
+          >
+            <option value="hacker">Hacker</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </SettingRow>
+      </section>
 
       <section className="bg-surface-container-high">
         <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">

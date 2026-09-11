@@ -30,8 +30,7 @@ import { useIsDesktop } from "@/lib/use-is-desktop";
 import { displayFilename, formatWordCount, shortHash } from "@/lib/format";
 import { useNotesQuery, useNotesMutations } from "@/lib/notes-query";
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
-import { saveSettingsAction } from "@/server/actions/settings";
-import { saveLocalSettings } from "@/lib/local-settings";
+import { persistSettings } from "@/lib/save-settings";
 import { useSignOut } from "@/lib/use-sign-out";
 import type { Settings } from "@/lib/schemas";
 
@@ -238,13 +237,10 @@ export function WorkspaceBuffer() {
     (patch: Partial<Settings>) => {
       setSettingsStore(patch);
       const next = { ...settings, ...patch };
-      if (useWorkspaceStore.getState().syncEnabled) {
-        startTransition(() => {
-          saveSettingsAction(next).catch(() => {});
-        });
-      } else {
-        saveLocalSettings(next);
-      }
+      const syncEnabled = useWorkspaceStore.getState().syncEnabled;
+      startTransition(() => {
+        void persistSettings(next, syncEnabled);
+      });
     },
     [settings, setSettingsStore],
   );
