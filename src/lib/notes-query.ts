@@ -96,11 +96,18 @@ export function useMigrateLocalNotes(email: string | null) {
   const { addNote } = useNotesMutations();
   useEffect(() => {
     if (!email) return;
+    // Dev Strict Mode mounts every effect twice; without this guard, both
+    // runs see the same not-yet-synced note (the first run's markLocalSynced
+    // hasn't landed yet) and both push it, producing a duplicate cache entry
+    // (and a duplicate React key).
+    let cancelled = false;
     void (async () => {
       const local = await listNotes();
       for (const n of local.filter((note) => note.syncedAt === null)) {
+        if (cancelled) return;
         try {
           const result = await saveNoteContentAction({ noteId: n.id, content: n.content });
+          if (cancelled) return;
           await markLocalSynced(n.id, result.updatedAt);
           addNote({
             id: n.id,
@@ -116,6 +123,9 @@ export function useMigrateLocalNotes(email: string | null) {
         }
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [email, addNote]);
 }
 
@@ -196,11 +206,21 @@ export async function warmAllNotes(
 export function useNotesMutations() {
   const queryClient = useQueryClient();
 
+  // An upsert, not a blind prepend: a duplicate id (e.g. two overlapping
+  // useMigrateLocalNotes runs under dev Strict Mode, or any other caller
+  // racing itself) replaces the existing entry in place instead of adding
+  // a second array entry with the same id -- which React's keyed rendering
+  // can't represent anyway (see SidebarBufferList's duplicate-key error).
   const addNote = useCallback(
     (note: NoteRecord) => {
-      queryClient.setQueryData<NoteRecord[]>(notesQueryKey, (old) =>
-        old ? [note, ...old] : [note],
-      );
+      queryClient.setQueryData<NoteRecord[]>(notesQueryKey, (old) => {
+        if (!old) return [note];
+        const index = old.findIndex((n) => n.id === note.id);
+        if (index === -1) return [note, ...old];
+        const next = [...old];
+        next[index] = note;
+        return next;
+      });
     },
     [queryClient],
   );
