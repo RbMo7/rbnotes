@@ -1,20 +1,32 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { notesQueryKey, type NoteRecord } from "@/lib/note-types";
+import { useWorkspaceStore } from "@/lib/store";
 
 const mocks = vi.hoisted(() => ({
   setNoteFlagsAction: vi.fn(async () => {}),
   deleteNoteAction: vi.fn(async () => {}),
   goHome: vi.fn(),
   createAndOpenNote: vi.fn(),
+  getLocalNote: vi.fn(),
+  setLocalNote: vi.fn(async () => {}),
+  tombstoneLocalNote: vi.fn(async () => {}),
+  purgeLocalNote: vi.fn(async () => {}),
 }));
 
 vi.mock("@/server/actions/notes", () => ({
   setNoteFlagsAction: mocks.setNoteFlagsAction,
   deleteNoteAction: mocks.deleteNoteAction,
+}));
+
+vi.mock("@/lib/local-notes-store", () => ({
+  getNote: mocks.getLocalNote,
+  setNote: mocks.setLocalNote,
+  tombstoneNote: mocks.tombstoneLocalNote,
+  purgeNote: mocks.purgeLocalNote,
 }));
 
 vi.mock("@/components/workspace/WorkspaceContext", () => ({
@@ -66,6 +78,11 @@ describe("useNoteOperations", () => {
     mocks.deleteNoteAction.mockClear();
     mocks.goHome.mockClear();
     mocks.createAndOpenNote.mockClear();
+    mocks.getLocalNote.mockReset().mockResolvedValue(undefined);
+    mocks.setLocalNote.mockClear();
+    mocks.tombstoneLocalNote.mockClear();
+    mocks.purgeLocalNote.mockClear();
+    useWorkspaceStore.setState({ syncEnabled: true });
   });
 
   it("archives a non-empty buffer and persists the flag in the background", () => {
@@ -123,5 +140,116 @@ describe("useNoteOperations", () => {
       result.current.create();
     });
     expect(mocks.createAndOpenNote).toHaveBeenCalledOnce();
+  });
+
+  it("mirrors a rename into the Local store, not just the cache", async () => {
+    mocks.getLocalNote.mockResolvedValue({
+      id: note.id,
+      title: "Hello",
+      content: "body",
+      pinned: false,
+      archived: false,
+      createdAt: "2026-09-10T00:00:00.000Z",
+      editedAt: "2026-09-10T00:00:00.000Z",
+      syncedAt: "2026-09-10T00:00:00.000Z",
+      deleted: false,
+    });
+    const { result } = setup("body");
+
+    act(() => {
+      result.current.rename("Renamed");
+    });
+
+    await waitFor(() =>
+      expect(mocks.setLocalNote).toHaveBeenCalledWith(
+        expect.objectContaining({ id: note.id, title: "Renamed" }),
+      ),
+    );
+  });
+
+  it("mirrors an archive into the Local store", async () => {
+    mocks.getLocalNote.mockResolvedValue({
+      id: note.id,
+      title: "Hello",
+      content: "body",
+      pinned: false,
+      archived: false,
+      createdAt: "2026-09-10T00:00:00.000Z",
+      editedAt: "2026-09-10T00:00:00.000Z",
+      syncedAt: "2026-09-10T00:00:00.000Z",
+      deleted: false,
+    });
+    const { result } = setup("# Title\n\nsome body");
+
+    act(() => {
+      result.current.delete(false);
+    });
+
+    await waitFor(() =>
+      expect(mocks.setLocalNote).toHaveBeenCalledWith(
+        expect.objectContaining({ id: note.id, archived: true }),
+      ),
+    );
+  });
+
+  it("purges (not tombstones) a Local store note that was never synced, on hard delete", async () => {
+    mocks.getLocalNote.mockResolvedValue({
+      id: note.id,
+      title: "Hello",
+      content: "some body",
+      pinned: false,
+      archived: false,
+      createdAt: "2026-09-10T00:00:00.000Z",
+      editedAt: "2026-09-10T00:00:00.000Z",
+      syncedAt: null,
+      deleted: false,
+    });
+    const { result } = setup("some body");
+
+    act(() => {
+      result.current.delete(true);
+    });
+
+    await waitFor(() => expect(mocks.purgeLocalNote).toHaveBeenCalledWith(note.id));
+    expect(mocks.tombstoneLocalNote).not.toHaveBeenCalled();
+  });
+
+  it("tombstones (not purges) a Local store note that was already synced, on hard delete", async () => {
+    mocks.getLocalNote.mockResolvedValue({
+      id: note.id,
+      title: "Hello",
+      content: "some body",
+      pinned: false,
+      archived: false,
+      createdAt: "2026-09-10T00:00:00.000Z",
+      editedAt: "2026-09-10T00:00:00.000Z",
+      syncedAt: "2026-09-10T00:00:00.000Z",
+      deleted: false,
+    });
+    const { result } = setup("some body");
+
+    act(() => {
+      result.current.delete(true);
+    });
+
+    await waitFor(() => expect(mocks.tombstoneLocalNote).toHaveBeenCalledWith(note.id, expect.any(String)));
+    expect(mocks.purgeLocalNote).not.toHaveBeenCalled();
+  });
+
+  it("never calls the auth-gated delete/archive server actions for a Local-only session", async () => {
+    useWorkspaceStore.setState({ syncEnabled: false });
+    const { result: archiveResult } = setup("# Title\n\nsome body");
+    act(() => {
+      archiveResult.current.delete(false);
+    });
+
+    const { result: deleteResult } = setup("some body");
+    act(() => {
+      deleteResult.current.delete(true);
+    });
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(mocks.setNoteFlagsAction).not.toHaveBeenCalled();
+    expect(mocks.deleteNoteAction).not.toHaveBeenCalled();
   });
 });
