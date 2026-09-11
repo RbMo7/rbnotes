@@ -76,6 +76,7 @@ export const settingsSchema = z.object({
   wordWrap: z.boolean().default(true),
   autosave: z.boolean().default(true),
   sidebarCollapsed: z.boolean().default(false),
+  theme: z.enum(["hacker", "dark", "light"]).default("hacker"),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;

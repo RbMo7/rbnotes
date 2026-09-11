@@ -5,7 +5,13 @@
    design system ("Vim Terminal Minimalist"). Dark-only.
    ============================================================ */
 @theme {
-  /* Colors */
+  /* Colors -- the "Hacker" theme (see docs/research/theme-palette.md §4.1).
+     This is also the base/default palette: rendered wherever no
+     [data-theme="dark"|"light"] override applies (auth pages, before
+     hydration, or an explicit "hacker" choice), per the theme-support
+     spec's "Hacker is the default" decision. Dark and Light override these
+     same custom properties below, outside this block -- see the
+     [data-theme="..."] rulesets after @layer base. */
   --color-surface: #121416;
   --color-surface-dim: #121416;
   --color-surface-bright: #38393c;
@@ -17,23 +23,23 @@
   --color-surface-variant: #333537;
 
   --color-on-surface: #e2e2e5;
-  --color-on-surface-variant: #bccbb9;
+  --color-on-surface-variant: #a8b0b0;
   --color-inverse-surface: #e2e2e5;
   --color-inverse-on-surface: #2f3133;
 
-  --color-outline: #869585;
-  --color-outline-variant: #3d4a3d;
+  --color-outline: #85918f;
+  --color-outline-variant: #3a4142;
 
-  --color-primary: #4be277;
-  --color-on-primary: #003915;
-  --color-primary-container: #22c55e;
-  --color-on-primary-container: #004b1e;
-  --color-primary-fixed: #6bff8f;
-  --color-primary-fixed-dim: #4ae176;
-  --color-on-primary-fixed: #002109;
-  --color-on-primary-fixed-variant: #005321;
-  --color-inverse-primary: #006e2f;
-  --color-surface-tint: #4ae176;
+  --color-primary: #4bd0d0;
+  --color-on-primary: #003636;
+  --color-primary-container: #1f9e9e;
+  --color-on-primary-container: #d8f7f7;
+  --color-primary-fixed: #7ee5e5;
+  --color-primary-fixed-dim: #4bd0d0;
+  --color-on-primary-fixed: #002020;
+  --color-on-primary-fixed-variant: #0a5050;
+  --color-inverse-primary: #0a7a7a;
+  --color-surface-tint: #4bd0d0;
 
   --color-secondary: #b9c8de;
   --color-on-secondary: #233143;
@@ -134,6 +140,130 @@
   --radius-DEFAULT: 0.25rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
+}
+
+/* ============================================================
+   Theme overrides (theme-support spec, docs/research/theme-palette.md).
+   "Hacker" needs no block of its own -- it IS the @theme base above.
+   These two redefine the same --color-* custom properties Tailwind's
+   @theme already emits at :root; every component reads colors exclusively
+   through the resulting utility classes (bg-surface, text-primary, ...),
+   so overriding the properties here is the whole mechanism -- no
+   component-level styling changes anywhere. The data-theme attribute
+   itself is applied to <html> by SettingsHydrator.
+   ============================================================ */
+[data-theme="dark"] {
+  --color-surface: #1c1e22;
+  --color-surface-dim: #1c1e22;
+  --color-surface-bright: #3d4048;
+  --color-surface-container-lowest: #16181b;
+  --color-surface-container-low: #212327;
+  --color-surface-container: #25272c;
+  --color-surface-container-high: #2f3237;
+  --color-surface-container-highest: #3a3d43;
+  --color-surface-variant: #3a3d43;
+
+  --color-on-surface: #e6e7ea;
+  --color-on-surface-variant: #a9adb6;
+  --color-inverse-surface: #e6e7ea;
+  --color-inverse-on-surface: #2a2c31;
+
+  --color-outline: #82868f;
+  --color-outline-variant: #45484f;
+
+  --color-primary: #5b9df0;
+  --color-on-primary: #052a52;
+  --color-primary-container: #1e5fb5;
+  --color-on-primary-container: #d8e6fb;
+  --color-primary-fixed: #a9c9f7;
+  --color-primary-fixed-dim: #5b9df0;
+  --color-on-primary-fixed: #051c38;
+  --color-on-primary-fixed-variant: #0c3f7d;
+  --color-inverse-primary: #1b5aab;
+  --color-surface-tint: #5b9df0;
+
+  --color-secondary: #9aa8bb;
+  --color-on-secondary: #212c38;
+  --color-secondary-container: #37414f;
+  --color-on-secondary-container: #c3cddb;
+  --color-secondary-fixed: #d3dce8;
+  --color-secondary-fixed-dim: #9aa8bb;
+  --color-on-secondary-fixed: #10171f;
+  --color-on-secondary-fixed-variant: #37414f;
+
+  --color-tertiary: #9fd6c4;
+  --color-on-tertiary: #08362a;
+  --color-tertiary-container: #1f7f65;
+  --color-on-tertiary-container: #d4f3e9;
+  --color-tertiary-fixed: #c4ecdf;
+  --color-tertiary-fixed-dim: #9fd6c4;
+  --color-on-tertiary-fixed: #06251d;
+  --color-on-tertiary-fixed-variant: #17604b;
+
+  --color-error: #ef9a95;
+  --color-on-error: #5c0e0c;
+  --color-error-container: #a33531;
+  --color-on-error-container: #fbdedc;
+
+  --color-background: #1c1e22;
+  --color-on-background: #e6e7ea;
+}
+
+[data-theme="light"] {
+  --color-surface: #ffffff;
+  --color-surface-dim: #e3e4e6;
+  --color-surface-bright: #ffffff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f6f6f7;
+  --color-surface-container: #f0f1f2;
+  --color-surface-container-high: #e9eaec;
+  --color-surface-container-highest: #e2e3e5;
+  --color-surface-variant: #e2e3e5;
+
+  --color-on-surface: #1c1c1e;
+  --color-on-surface-variant: #46474a;
+  --color-inverse-surface: #1c1c1e;
+  --color-inverse-on-surface: #f2f2f3;
+
+  --color-outline: #797a7d;
+  --color-outline-variant: #dfe1e4;
+
+  --color-primary: #086dd6;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #d9e9fc;
+  --color-on-primary-container: #063d78;
+  --color-primary-fixed: #d9e9fc;
+  --color-primary-fixed-dim: #a9cdf6;
+  --color-on-primary-fixed: #052a52;
+  --color-on-primary-fixed-variant: #065cb5;
+  --color-inverse-primary: #9cc6f5;
+  --color-surface-tint: #086dd6;
+
+  --color-secondary: #46617f;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #d6e3f0;
+  --color-on-secondary-container: #294059;
+  --color-secondary-fixed: #d6e3f0;
+  --color-secondary-fixed-dim: #a9c1d8;
+  --color-on-secondary-fixed: #16283b;
+  --color-on-secondary-fixed-variant: #33495f;
+
+  --color-tertiary: #007662;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #d3f0e8;
+  --color-on-tertiary-container: #00483b;
+  --color-tertiary-fixed: #d3f0e8;
+  --color-tertiary-fixed-dim: #4fae9a;
+  --color-on-tertiary-fixed: #002e25;
+  --color-on-tertiary-fixed-variant: #00594a;
+
+  --color-error: #cc2128;
+  --color-on-error: #ffffff;
+  --color-error-container: #fcdedc;
+  --color-on-error-container: #7d1013;
+
+  --color-background: #ffffff;
+  --color-on-background: #1c1c1e;
 }
 
 @layer base {
