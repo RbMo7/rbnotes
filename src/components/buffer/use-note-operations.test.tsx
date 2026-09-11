@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   setLocalNote: vi.fn(async () => {}),
   tombstoneLocalNote: vi.fn(async () => {}),
   purgeLocalNote: vi.fn(async () => {}),
+  cancelAutosave: vi.fn(),
 }));
 
 vi.mock("@/server/actions/notes", () => ({
@@ -65,6 +66,7 @@ function setup(content: string) {
         noteId: note.id,
         getContent: () => content,
         notify,
+        cancelAutosave: mocks.cancelAutosave,
       }),
     { wrapper },
   );
@@ -82,7 +84,16 @@ describe("useNoteOperations", () => {
     mocks.setLocalNote.mockClear();
     mocks.tombstoneLocalNote.mockClear();
     mocks.purgeLocalNote.mockClear();
+    mocks.cancelAutosave.mockClear();
     useWorkspaceStore.setState({ syncEnabled: true });
+  });
+
+  it("cancels any pending autosave for the note before archiving or deleting it", () => {
+    const { result } = setup("some body");
+    act(() => {
+      result.current.delete(true);
+    });
+    expect(mocks.cancelAutosave).toHaveBeenCalledWith(note.id);
   });
 
   it("archives a non-empty buffer and persists the flag in the background", () => {

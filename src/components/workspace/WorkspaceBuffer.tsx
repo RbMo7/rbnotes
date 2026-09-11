@@ -139,7 +139,7 @@ export function WorkspaceBuffer() {
       updateNote(id, info),
     [updateNote],
   );
-  const { markDirty, flush, isDirty } = useAutosave({
+  const { markDirty, flush, isDirty, cancel } = useAutosave({
     getContentFor,
     activeNoteId,
     onSaved: handleSaved,
@@ -174,6 +174,7 @@ export function WorkspaceBuffer() {
     noteId: activeNoteId ?? "",
     getContent,
     notify: showNotify,
+    cancelAutosave: cancel,
   });
 
   const syncEnabled = useWorkspaceStore((s) => s.syncEnabled);

@@ -45,6 +45,11 @@ async function persistLocallyImmediately(noteId: string, content: string) {
       editedAt: now,
       syncedAt: existing?.syncedAt ?? null,
       deleted: false,
+      // Preserve whoever already owns this local record (matches
+      // syncedAt's own existing?.syncedAt ?? pattern just above); only a
+      // record with no local mirror yet gets tagged from the current
+      // session, same as useCreateNote does at birth.
+      ownerId: existing?.ownerId ?? useWorkspaceStore.getState().currentUserId,
     });
   } catch {
     // Local store unavailable (private browsing, quota, etc.) -- the live
@@ -234,26 +239,68 @@ export function useAutosave({
     [getInfo, syncIfActive, flush],
   );
 
+  // Every currently-dirty note, flushed together and awaited -- the same
+  // shape the retry effect below already builds locally, pulled out here
+  // so it can also be registered app-wide (next effect) for useSignOut's
+  // best-effort flush-before-signing-out.
+  const flushAllDirty = useCallback(async () => {
+    const pending: Promise<boolean>[] = [];
+    for (const [noteId, info] of infoRef.current) {
+      if (info.revision !== info.savedRevision) pending.push(flush(noteId));
+    }
+    await Promise.all(pending);
+  }, [flush]);
+
   // Retry every note still waiting on a push: on regaining connectivity
   // (the `online` event) and on a slow poll as a backstop for the case
   // where `navigator.onLine` was already true but pushes were failing.
+  // Gated on syncEnabled -- a Local-only session's flush() never calls the
+  // server at all (it's a pure local no-op branch), so this timer/listener
+  // would just be a permanent no-op wake-up for the app's whole lifetime
+  // with nothing to actually retry. Reactive, not a one-time getState()
+  // check: syncEnabled can flip mid-session (sign-in/out) without this
+  // component remounting, and the interval needs to install/tear down
+  // along with it.
+  const syncEnabled = useWorkspaceStore((s) => s.syncEnabled);
   useEffect(() => {
-    const flushAllDirty = () => {
-      for (const [noteId, info] of infoRef.current) {
-        if (info.revision !== info.savedRevision) void flush(noteId);
-      }
-    };
-    window.addEventListener("online", flushAllDirty);
-    const interval = setInterval(flushAllDirty, RETRY_POLL_MS);
+    if (!syncEnabled) return;
+    const retryAll = () => void flushAllDirty();
+    window.addEventListener("online", retryAll);
+    const interval = setInterval(retryAll, RETRY_POLL_MS);
     return () => {
-      window.removeEventListener("online", flushAllDirty);
+      window.removeEventListener("online", retryAll);
       clearInterval(interval);
     };
-  }, [flush]);
+  }, [flushAllDirty, syncEnabled]);
+
+  // App-wide access to flushAllDirty (same registration pattern
+  // saveActive/registerActiveSave already uses for Ctrl+S) -- useSignOut
+  // reads this to make a best-effort attempt at pushing pending edits
+  // before actually signing out.
+  useEffect(() => {
+    useWorkspaceStore.getState().registerFlushAllDirty(flushAllDirty);
+    return () => useWorkspaceStore.getState().registerFlushAllDirty(null);
+  }, [flushAllDirty]);
 
   const isDirty = useCallback(
     (noteId: string) => getInfo(noteId).revision !== getInfo(noteId).savedRevision,
     [getInfo],
+  );
+
+  // Cancels a note's pending debounce/local-persist timers and forgets it
+  // entirely -- called right before a delete/purge so no stale pending
+  // save can fire afterward and rewrite `deleted: false` over the
+  // tombstone/purge that just happened (see use-note-operations.ts's
+  // deleteNote).
+  const cancel = useCallback(
+    (noteId: string) => {
+      const info = infoRef.current.get(noteId);
+      if (!info) return;
+      if (info.timer) clearTimeout(info.timer);
+      if (info.localTimer) clearTimeout(info.localTimer);
+      infoRef.current.delete(noteId);
+    },
+    [],
   );
 
   // Deliberately no beforeunload guard: manual-only save needed one as its
@@ -264,5 +311,5 @@ export function useAutosave({
   // Notes) -- not something to half-implement as an unrequested warning
   // dialog here.
 
-  return { markDirty, flush, isDirty };
+  return { markDirty, flush, isDirty, cancel };
 }

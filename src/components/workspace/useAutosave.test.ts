@@ -315,4 +315,65 @@ describe("useAutosave", () => {
 
     expect(mocks.saveNoteContentAction).toHaveBeenCalledWith({ noteId: "a", content: "hello" });
   });
+
+  it("cancel drops a note's pending debounce -- it never fires, never resurrects a just-deleted note", async () => {
+    const { result } = setup("a", { a: "hello" });
+    act(() => result.current.markDirty("a"));
+    expect(result.current.isDirty("a")).toBe(true);
+
+    act(() => result.current.cancel("a"));
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await Promise.resolve();
+    });
+
+    expect(mocks.saveNoteContentAction).not.toHaveBeenCalled();
+    expect(mocks.setNote).not.toHaveBeenCalled();
+    // A cancelled note is forgotten entirely, not just "clean" -- isDirty
+    // for an id with no info entry reports false via the same fresh-entry
+    // path a note that was never touched would.
+    expect(result.current.isDirty("a")).toBe(false);
+  });
+
+  it("cancel on a note with no pending save is a harmless no-op", () => {
+    const { result } = setup("a", { a: "hello" });
+    expect(() => act(() => result.current.cancel("a"))).not.toThrow();
+  });
+
+  it("does not install the retry timer/online listener for a Local-only session -- nothing to retry", async () => {
+    useWorkspaceStore.setState({ syncEnabled: false });
+    const addSpy = vi.spyOn(window, "addEventListener");
+    setup("a", { a: "hello" });
+
+    expect(addSpy).not.toHaveBeenCalledWith("online", expect.any(Function));
+    addSpy.mockRestore();
+  });
+
+  it("installs the retry timer for a Synced session", () => {
+    const addSpy = vi.spyOn(window, "addEventListener");
+    setup("a", { a: "hello" });
+
+    expect(addSpy).toHaveBeenCalledWith("online", expect.any(Function));
+    addSpy.mockRestore();
+  });
+
+  it("registers a flushAllDirty callback into the shared store while mounted, and unregisters it on unmount", async () => {
+    const { unmount } = setup("a", { a: "hello" });
+    expect(useWorkspaceStore.getState().flushAllDirty).toBeTypeOf("function");
+
+    unmount();
+    expect(useWorkspaceStore.getState().flushAllDirty).toBeNull();
+  });
+
+  it("the registered flushAllDirty actually flushes every currently-dirty note", async () => {
+    const { result } = setup("a", { a: "hello" });
+    act(() => result.current.markDirty("a"));
+
+    await act(async () => {
+      await useWorkspaceStore.getState().flushAllDirty?.();
+    });
+
+    expect(mocks.saveNoteContentAction).toHaveBeenCalledWith({ noteId: "a", content: "hello" });
+  });
 });

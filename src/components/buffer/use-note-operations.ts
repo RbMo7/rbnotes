@@ -28,10 +28,13 @@ export function useNoteOperations({
   noteId,
   getContent,
   notify,
+  cancelAutosave,
 }: {
   noteId: string;
   getContent: () => string;
   notify: (message: string) => void;
+  /** useAutosave's cancel(noteId) -- stops a pending save from resurrecting a just-deleted note. */
+  cancelAutosave: (noteId: string) => void;
 }): Pick<NoteOps, "create" | "rename" | "delete"> {
   const { updateNote, removeNote } = useNotesMutations();
   const { createAndOpenNote, goHome } = useWorkspace();
@@ -69,6 +72,12 @@ export function useNoteOperations({
       // updateSettings were already fixed for.
       const syncEnabled = useWorkspaceStore.getState().syncEnabled;
 
+      // A save still pending (debounce not yet fired, or mid-retry) for
+      // this exact note must never survive the delete -- it would fire
+      // later and call persistLocallyImmediately, which rewrites
+      // `deleted: false` over the tombstone/purge below.
+      cancelAutosave(noteId);
+
       if (mode === "purge") {
         removeNote(noteId);
         void (async () => {
@@ -101,7 +110,7 @@ export function useNoteOperations({
       }
       goHome();
     },
-    [noteId, getContent, removeNote, updateNote, goHome],
+    [noteId, getContent, removeNote, updateNote, goHome, cancelAutosave],
   );
 
   return useMemo(
