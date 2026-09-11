@@ -176,8 +176,15 @@ export function WorkspaceBuffer() {
     notify: showNotify,
   });
 
+  const syncEnabled = useWorkspaceStore((s) => s.syncEnabled);
+
   const loadShareInfo = useCallback(() => {
-    if (!activeNoteId) return;
+    // Sharing needs a real account (createShareAction/getShareInfoAction
+    // both call getAuthedUser()) -- calling it for a Local-only session
+    // would redirect straight to /login. The Inspector shows a "sign in
+    // to share" message instead (see the signedIn prop below); there's
+    // nothing to fetch.
+    if (!activeNoteId || !syncEnabled) return;
     setShareLoading(true);
     getShareInfoAction({ noteId: activeNoteId })
       .then((info) => {
@@ -185,7 +192,7 @@ export function WorkspaceBuffer() {
         setShareViewers(info.viewers);
       })
       .finally(() => setShareLoading(false));
-  }, [activeNoteId]);
+  }, [activeNoteId, syncEnabled]);
 
   useEffect(() => {
     // Fetches and sets share info fresh each time the inspector opens.
@@ -195,6 +202,10 @@ export function WorkspaceBuffer() {
 
   const handleShare = useCallback(() => {
     if (!activeNoteId) return;
+    if (!syncEnabled) {
+      showNotify("SHARE: sign in to share notes", "error");
+      return;
+    }
     startTransition(async () => {
       const result = await createShareAction({ noteId: activeNoteId });
       setShareToken(result.token);
@@ -203,17 +214,17 @@ export function WorkspaceBuffer() {
       showNotify(`SHARE: link copied — /s/${result.token.slice(0, 6)}…  [OK]`);
       setInspectorOpen(true);
     });
-  }, [activeNoteId, showNotify, setInspectorOpen]);
+  }, [activeNoteId, syncEnabled, showNotify, setInspectorOpen]);
 
   const handleUnshare = useCallback(() => {
-    if (!activeNoteId) return;
+    if (!activeNoteId || !syncEnabled) return;
     startTransition(async () => {
       await revokeShareAction({ noteId: activeNoteId });
       setShareToken(null);
       setShareViewers([]);
       showNotify("SHARE: link revoked  [OK]");
     });
-  }, [activeNoteId, showNotify]);
+  }, [activeNoteId, syncEnabled, showNotify]);
 
   const handleCopyShare = useCallback(() => {
     if (!shareToken) return;
@@ -369,6 +380,7 @@ export function WorkspaceBuffer() {
       <InspectorPanel
         open={inspectorOpen}
         onClose={() => setInspectorOpen(false)}
+        signedIn={syncEnabled}
         loading={shareLoading}
         token={shareToken}
         viewers={shareViewers}
