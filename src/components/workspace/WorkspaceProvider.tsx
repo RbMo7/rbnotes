@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceNav } from "@/components/workspace/useWorkspaceNav";
-import { useNotesQuery, useLocalNotesQuery, useCreateNote, warmAllNotes } from "@/lib/notes-query";
+import {
+  useNotesQuery,
+  useLocalNotesQuery,
+  useMigrateLocalNotes,
+  useCreateNote,
+  warmAllNotes,
+} from "@/lib/notes-query";
 import type { NoteRecord } from "@/lib/note-types";
 import { useWorkspaceStore, isNoteDirty } from "@/lib/store";
 import { WorkspaceContextProvider, type WorkspaceApi } from "@/components/workspace/WorkspaceContext";
@@ -42,6 +48,7 @@ export function WorkspaceProvider({
 
   const { data: notes } = useNotesQuery();
   useLocalNotesQuery(!email);
+  useMigrateLocalNotes(email);
   const { activeNoteId, open } = useWorkspaceNav();
   const createNote = useCreateNote();
   const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);

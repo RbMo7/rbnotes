@@ -2,10 +2,14 @@
 
 import { useCallback, useEffect } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { getAllNotesMetaAction, getAllNoteContentsAction } from "@/server/actions/notes";
+import {
+  getAllNotesMetaAction,
+  getAllNoteContentsAction,
+  saveNoteContentAction,
+} from "@/server/actions/notes";
 import { notesQueryKey, type NoteRecord } from "@/lib/note-types";
 import { useWorkspaceStore } from "@/lib/store";
-import { listNotes, setNote as setLocalNote } from "@/lib/local-notes-store";
+import { listNotes, setNote as setLocalNote, markSynced as markLocalSynced } from "@/lib/local-notes-store";
 
 export type { NoteRecord };
 
@@ -78,6 +82,43 @@ export function useLocalNotesQuery(enabled: boolean) {
   }, [enabled, queryClient]);
 }
 
+/**
+ * The other direction from useLocalNotesQuery: on sign-in, any Local-only
+ * note never pushed to the server (syncedAt === null in the Local store --
+ * i.e. created or last edited before this browser had an account) gets
+ * pushed now, adopting it into the Synced set under the same client-
+ * generated id it's always had. Spec story #15: "signing in starts syncing
+ * my existing local notes, so upgrading doesn't feel like starting over."
+ * Naturally idempotent -- once pushed, syncedAt is set, so a later mount
+ * (e.g. reloading while still signed in) finds nothing left to migrate.
+ */
+export function useMigrateLocalNotes(email: string | null) {
+  const { addNote } = useNotesMutations();
+  useEffect(() => {
+    if (!email) return;
+    void (async () => {
+      const local = await listNotes();
+      for (const n of local.filter((note) => note.syncedAt === null)) {
+        try {
+          const result = await saveNoteContentAction({ noteId: n.id, content: n.content });
+          await markLocalSynced(n.id, result.updatedAt);
+          addNote({
+            id: n.id,
+            title: result.title,
+            content: n.content,
+            pinned: n.pinned,
+            archived: n.archived,
+            createdAt: n.createdAt,
+            updatedAt: result.updatedAt,
+          });
+        } catch {
+          // Best-effort -- stays unsynced, retried on the next sign-in mount.
+        }
+      }
+    })();
+  }, [email, addNote]);
+}
+
 /** True once every note in the cache has its content warmed -- the boundary hybrid search resolves on. */
 export function isFullyWarm(notes: NoteRecord[]): boolean {
   return notes.every((n) => n.content !== undefined);
@@ -109,15 +150,40 @@ export async function warmAllNotes(
   }
   const contentById = new Map(results.map((r) => [r.id, r.content]));
 
+  const newlyWarmed: NoteRecord[] = [];
   queryClient.setQueryData<NoteRecord[]>(notesQueryKey, (old) =>
     old?.map((n) => {
       if (n.content !== undefined) return n;
       if (isDirty?.(n.id)) return n;
       if (updatedAtBefore.get(n.id) !== n.updatedAt) return n;
       const content = contentById.get(n.id);
-      return content === undefined ? n : { ...n, content };
+      if (content === undefined) return n;
+      const warmed = { ...n, content };
+      newlyWarmed.push(warmed);
+      return warmed;
     }),
   );
+
+  // Mirror into the Local store too -- Seam 1 is the universal storage
+  // layer for every session, Synced included (ADR 0002), not just a
+  // Local-only concern. Without this, a Synced note you never edited this
+  // session (just fetched from the server) never reaches IndexedDB, and
+  // would disappear the moment you signed out, even though nothing was
+  // actually lost server-side. syncedAt = updatedAt because this content
+  // just came from the server -- it's synced by definition.
+  for (const n of newlyWarmed) {
+    void setLocalNote({
+      id: n.id,
+      title: n.title,
+      content: n.content ?? "",
+      pinned: n.pinned,
+      archived: n.archived,
+      createdAt: n.createdAt,
+      editedAt: n.updatedAt,
+      syncedAt: n.updatedAt,
+      deleted: false,
+    });
+  }
 }
 
 /**

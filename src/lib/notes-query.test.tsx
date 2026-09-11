@@ -9,16 +9,22 @@ import { useWorkspaceStore } from "@/lib/store";
 const mocks = vi.hoisted(() => ({
   getAllNoteContentsAction: vi.fn(),
   getAllNotesMetaAction: vi.fn(),
+  saveNoteContentAction: vi.fn(),
   listNotes: vi.fn(),
+  setLocalNote: vi.fn(),
+  markLocalSynced: vi.fn(),
 }));
 
 vi.mock("@/server/actions/notes", () => ({
   getAllNoteContentsAction: mocks.getAllNoteContentsAction,
   getAllNotesMetaAction: mocks.getAllNotesMetaAction,
+  saveNoteContentAction: mocks.saveNoteContentAction,
 }));
 
 vi.mock("@/lib/local-notes-store", () => ({
   listNotes: mocks.listNotes,
+  setNote: mocks.setLocalNote,
+  markSynced: mocks.markLocalSynced,
 }));
 
 import { warmAllNotes, isFullyWarm, useNotesQuery, useLocalNotesQuery } from "@/lib/notes-query";
