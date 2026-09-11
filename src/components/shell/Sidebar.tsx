@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -9,6 +10,63 @@ import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { SidebarLists } from "@/components/shell/sidebar/SidebarLists";
 import { LocalOnlyBadge } from "@/components/shell/LocalOnlyBadge";
+
+const MIN_SIDEBAR_WIDTH = 200;
+const MAX_SIDEBAR_WIDTH = 420;
+const SIDEBAR_WIDTH_STORAGE_KEY = "rbnotes-sidebar-width";
+const SIDEBAR_WIDTH_VAR = "--spacing-sidebar-width";
+
+/**
+ * Drag-to-resize for the sidebar, clamped to [MIN_SIDEBAR_WIDTH,
+ * MAX_SIDEBAR_WIDTH]. Every consumer of the sidebar's width (this file's
+ * own w-sidebar-width, AppShell's pl-sidebar-width, TopBar's
+ * left-sidebar-width) reads the same Tailwind v4 @theme token
+ * (globals.css), which is just a CSS custom property under the hood --
+ * so writing directly to it on the root element (an inline style,
+ * highest specificity for that element) resizes all three in lockstep
+ * with zero prop drilling and no React re-render on every pointer move.
+ * Persisted to localStorage so a resize survives a reload.
+ */
+function useSidebarResize() {
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
+      if (saved) document.documentElement.style.setProperty(SIDEBAR_WIDTH_VAR, `${saved}px`);
+    } catch {
+      // Best-effort -- the default width from globals.css still applies.
+    }
+  }, []);
+
+  const draggingRef = useRef(false);
+
+  return useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
+    draggingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const onMove = (ev: PointerEvent) => {
+      if (!draggingRef.current) return;
+      const width = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, ev.clientX));
+      document.documentElement.style.setProperty(SIDEBAR_WIDTH_VAR, `${width}px`);
+    };
+    const onUp = () => {
+      draggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      const finalWidth = getComputedStyle(document.documentElement).getPropertyValue(SIDEBAR_WIDTH_VAR);
+      try {
+        localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(parseFloat(finalWidth)));
+      } catch {
+        // Best-effort -- the width still applies for the rest of this session.
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, []);
+}
 
 /**
  * Below the mobile breakpoint (the same `useIsDesktop()` seam everything
@@ -25,6 +83,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { createAndOpenNote } = useWorkspace();
   const isDesktop = useIsDesktop();
+  const onResizeStart = useSidebarResize();
 
   const handleNewNote = () => {
     createAndOpenNote();
@@ -89,6 +148,14 @@ export function Sidebar() {
           <LocalOnlyBadge />
         )}
       </div>
+
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        onPointerDown={onResizeStart}
+        className="hidden lg:block absolute top-0 right-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors"
+      />
       </aside>
     </>
   );
