@@ -54,6 +54,9 @@ afterEach(() => {
 describe("SidebarLists", () => {
   it("shows the buffer list by default", () => {
     render(<SidebarLists />);
+    // Fixture notes are months old, so they land in EARLIER, which --
+    // like every non-TODAY group -- starts collapsed; open it first.
+    fireEvent.click(screen.getByText("EARLIER"));
     expect(screen.getByText("shipping-plan.md")).toBeTruthy();
     expect(screen.getByText("grocery-list.md")).toBeTruthy();
   });
@@ -97,6 +100,7 @@ describe("SidebarLists", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Tags" }));
     fireEvent.click(screen.getByText("project"));
     fireEvent.click(screen.getByRole("tab", { name: "Buffers" }));
+    fireEvent.click(screen.getByText("EARLIER"));
 
     expect(screen.getByText("shipping-plan.md")).toBeTruthy();
     expect(screen.getByText("grocery-list.md")).toBeTruthy();
@@ -104,6 +108,7 @@ describe("SidebarLists", () => {
 
   it("plain typing filters the buffer list by title", () => {
     render(<SidebarLists />);
+    fireEvent.click(screen.getByText("EARLIER"));
     fireEvent.change(screen.getByLabelText("Filter or search"), {
       target: { value: "grocery" },
     });
@@ -114,6 +119,7 @@ describe("SidebarLists", () => {
 
   it("a leading / in the filter box escalates to global search on Enter, seeding it and leaving the local list untouched", () => {
     render(<SidebarLists />);
+    fireEvent.click(screen.getByText("EARLIER"));
     const input = screen.getByLabelText("Filter or search");
     fireEvent.change(input, { target: { value: "/deadline" } });
     fireEvent.keyDown(input, { key: "Enter" });
