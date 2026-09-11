@@ -30,7 +30,8 @@ import { useIsDesktop } from "@/lib/use-is-desktop";
 import { displayFilename, formatWordCount, shortHash } from "@/lib/format";
 import { useNotesQuery, useNotesMutations } from "@/lib/notes-query";
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
-import { saveSettingsAction } from "@/server/actions/settings";
+import { persistSettings } from "@/lib/save-settings";
+import { useSignOut } from "@/lib/use-sign-out";
 import type { Settings } from "@/lib/schemas";
 
 /**
@@ -138,7 +139,7 @@ export function WorkspaceBuffer() {
       updateNote(id, info),
     [updateNote],
   );
-  const { markDirty, flush, isDirty } = useAutosave({
+  const { markDirty, flush, isDirty, cancel } = useAutosave({
     getContentFor,
     activeNoteId,
     onSaved: handleSaved,
@@ -173,10 +174,19 @@ export function WorkspaceBuffer() {
     noteId: activeNoteId ?? "",
     getContent,
     notify: showNotify,
+    cancelAutosave: cancel,
   });
 
+  const syncEnabled = useWorkspaceStore((s) => s.syncEnabled);
+  const signOut = useSignOut();
+
   const loadShareInfo = useCallback(() => {
-    if (!activeNoteId) return;
+    // Sharing needs a real account (createShareAction/getShareInfoAction
+    // both call getAuthedUser()) -- calling it for a Local-only session
+    // would redirect straight to /login. The Inspector shows a "sign in
+    // to share" message instead (see the signedIn prop below); there's
+    // nothing to fetch.
+    if (!activeNoteId || !syncEnabled) return;
     setShareLoading(true);
     getShareInfoAction({ noteId: activeNoteId })
       .then((info) => {
@@ -184,7 +194,7 @@ export function WorkspaceBuffer() {
         setShareViewers(info.viewers);
       })
       .finally(() => setShareLoading(false));
-  }, [activeNoteId]);
+  }, [activeNoteId, syncEnabled]);
 
   useEffect(() => {
     // Fetches and sets share info fresh each time the inspector opens.
@@ -194,6 +204,10 @@ export function WorkspaceBuffer() {
 
   const handleShare = useCallback(() => {
     if (!activeNoteId) return;
+    if (!syncEnabled) {
+      showNotify("SHARE: sign in to share notes", "error");
+      return;
+    }
     startTransition(async () => {
       const result = await createShareAction({ noteId: activeNoteId });
       setShareToken(result.token);
@@ -202,17 +216,17 @@ export function WorkspaceBuffer() {
       showNotify(`SHARE: link copied — /s/${result.token.slice(0, 6)}…  [OK]`);
       setInspectorOpen(true);
     });
-  }, [activeNoteId, showNotify, setInspectorOpen]);
+  }, [activeNoteId, syncEnabled, showNotify, setInspectorOpen]);
 
   const handleUnshare = useCallback(() => {
-    if (!activeNoteId) return;
+    if (!activeNoteId || !syncEnabled) return;
     startTransition(async () => {
       await revokeShareAction({ noteId: activeNoteId });
       setShareToken(null);
       setShareViewers([]);
       showNotify("SHARE: link revoked  [OK]");
     });
-  }, [activeNoteId, showNotify]);
+  }, [activeNoteId, syncEnabled, showNotify]);
 
   const handleCopyShare = useCallback(() => {
     if (!shareToken) return;
@@ -223,8 +237,10 @@ export function WorkspaceBuffer() {
   const updateSettings = useCallback(
     (patch: Partial<Settings>) => {
       setSettingsStore(patch);
+      const next = { ...settings, ...patch };
+      const syncEnabled = useWorkspaceStore.getState().syncEnabled;
       startTransition(() => {
-        saveSettingsAction({ ...settings, ...patch }).catch(() => {});
+        void persistSettings(next, syncEnabled);
       });
     },
     [settings, setSettingsStore],
@@ -243,6 +259,14 @@ export function WorkspaceBuffer() {
     unshare: handleUnshare,
     updateSettings,
     openSettings: () => router.push("/settings"),
+    login: () => router.push("/login"),
+    logout: () => {
+      if (!syncEnabled) {
+        showNotify("LOGOUT: already local only -- nothing to sign out of", "error");
+        return;
+      }
+      signOut();
+    },
   };
 
   const commandContext: CommandContext = {
@@ -363,6 +387,7 @@ export function WorkspaceBuffer() {
       <InspectorPanel
         open={inspectorOpen}
         onClose={() => setInspectorOpen(false)}
+        signedIn={syncEnabled}
         loading={shareLoading}
         token={shareToken}
         viewers={shareViewers}

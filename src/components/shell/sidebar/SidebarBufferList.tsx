@@ -6,12 +6,13 @@ import { groupNotes, type NoteGroup } from "@/lib/grouping";
 import { NoteListItem } from "@/components/shell/NoteListItem";
 import type { NoteRecord } from "@/lib/note-types";
 
-// ARCHIVE starts collapsed (old notes you're not actively working with);
-// the recency groups start open since that's the normal browsing view.
+// Only TODAY starts open -- the sidebar's first paint should orient on
+// today's notes, not everything at once; THIS WEEK/EARLIER/ARCHIVE all
+// start collapsed and are one click away.
 const DEFAULT_OPEN: Record<NoteGroup["label"], boolean> = {
   TODAY: true,
-  "THIS WEEK": true,
-  EARLIER: true,
+  "THIS WEEK": false,
+  EARLIER: false,
   ARCHIVE: false,
 };
 

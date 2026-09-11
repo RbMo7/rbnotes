@@ -1,10 +1,60 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { saveSettingsAction } from "@/server/actions/settings";
-import { signOutAction } from "@/server/actions/auth";
+import Link from "next/link";
+import { persistSettings } from "@/lib/save-settings";
+import { useSignOut } from "@/lib/use-sign-out";
 import { useWorkspaceStore } from "@/lib/store";
 import type { Settings } from "@/lib/schemas";
+
+const THEME_OPTIONS: { value: Settings["theme"]; label: string }[] = [
+  { value: "hacker", label: "Hacker" },
+  { value: "dark", label: "Dark" },
+  { value: "light", label: "Light" },
+];
+
+/**
+ * A live preview, not a color name: the swatch itself carries
+ * `data-theme={value}`, so it renders under that theme's own [data-theme]
+ * CSS override (globals.css) and shows its real surface tone + accent
+ * color -- zero hardcoded hex duplicated here, same "components only ever
+ * read the CSS custom properties" rule the rest of the app already
+ * follows. The button chrome around it (border, label) stays in the
+ * *current* app theme's colors, not the swatch's own, so the selected
+ * state reads consistently no matter which swatch it's on.
+ */
+function ThemeSwatch({
+  value,
+  label,
+  selected,
+  onSelect,
+}: {
+  value: Settings["theme"];
+  label: string;
+  selected: boolean;
+  onSelect: (value: Settings["theme"]) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(value)}
+      aria-pressed={selected}
+      className={`flex flex-col items-center gap-space-1 px-space-2 py-space-2 border transition-colors ${
+        selected
+          ? "border-primary bg-surface-container-high"
+          : "border-outline-variant hover:border-outline"
+      }`}
+    >
+      <span
+        data-theme={value}
+        className="w-12 h-8 rounded-sm border border-outline-variant/40 bg-surface-container relative overflow-hidden"
+      >
+        <span className="absolute bottom-1 right-1 w-3 h-3 rounded-full bg-primary" />
+      </span>
+      <span className="font-label-sm text-label-sm text-on-surface">{label}</span>
+    </button>
+  );
+}
 
 function SettingRow({
   label,
@@ -30,21 +80,31 @@ function SettingRow({
   );
 }
 
-export function SettingsView({ email }: { email: string }) {
+export function SettingsView({ email }: { email: string | null }) {
   // Shared with every open note editor (WorkspaceBuffer) -- changing a
   // setting here is reflected there immediately, and vice versa, since
   // both read the exact same store instead of independently-fetched
   // copies of the same data.
   const settings = useWorkspaceStore((s) => s.settings);
+  const syncEnabled = useWorkspaceStore((s) => s.syncEnabled);
   const updateStore = useWorkspaceStore((s) => s.updateSettings);
   const [saved, setSaved] = useState(true);
   const [, startTransition] = useTransition();
+  const signOut = useSignOut();
 
+  // Editor preferences are a free-tier feature (ADR 0002) -- a Local-only
+  // session persists them to localStorage instead of the server, same
+  // branch WorkspaceBuffer's :set command takes.
   const update = (patch: Partial<Settings>) => {
     updateStore(patch);
+    const next = { ...settings, ...patch };
+    if (!syncEnabled) {
+      void persistSettings(next, false);
+      return;
+    }
     setSaved(false);
     startTransition(async () => {
-      await saveSettingsAction({ ...settings, ...patch });
+      await persistSettings(next, true);
       setSaved(true);
     });
   };
@@ -57,6 +117,25 @@ export function SettingsView({ email }: { email: string }) {
           {saved ? "[Saved]" : "[Saving...]"}
         </span>
       </div>
+
+      <section className="bg-surface-container-high">
+        <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">
+          Appearance
+        </div>
+        <SettingRow label="theme">
+          <div className="flex items-center gap-space-2">
+            {THEME_OPTIONS.map((opt) => (
+              <ThemeSwatch
+                key={opt.value}
+                value={opt.value}
+                label={opt.label}
+                selected={settings.theme === opt.value}
+                onSelect={(theme) => update({ theme })}
+              />
+            ))}
+          </div>
+        </SettingRow>
+      </section>
 
       <section className="bg-surface-container-high">
         <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">
@@ -101,24 +180,38 @@ export function SettingsView({ email }: { email: string }) {
         </SettingRow>
       </section>
 
-      <section className="bg-surface-container-high">
-        <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">
-          Account
-        </div>
-        <SettingRow label="identity (email)">
-          <span className="font-code-editor text-code-editor text-on-surface-variant">{email}</span>
-        </SettingRow>
-        <div className="px-space-4 py-space-3">
-          <form action={signOutAction}>
+      {email ? (
+        <section className="bg-surface-container-high">
+          <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">
+            Account
+          </div>
+          <SettingRow label="identity (email)">
+            <span className="font-code-editor text-code-editor text-on-surface-variant">{email}</span>
+          </SettingRow>
+          <div className="px-space-4 py-space-3">
             <button
-              type="submit"
+              onClick={signOut}
               className="px-space-3 py-space-2 bg-surface-container text-error border border-outline-variant hover:border-error font-label-md text-label-md transition-colors"
             >
               Sign out [:q!]
             </button>
-          </form>
-        </div>
-      </section>
+          </div>
+        </section>
+      ) : (
+        <section className="bg-surface-container-high">
+          <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">
+            Account
+          </div>
+          <div className="px-space-4 py-space-3 flex items-center justify-between gap-space-4">
+            <span className="font-label-sm text-label-sm text-on-surface-variant">
+              Local only -- these preferences stay in this browser.
+            </span>
+            <Link href="/login" className="text-primary hover:underline font-label-md text-label-md">
+              Sign in to sync
+            </Link>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

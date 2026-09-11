@@ -4,13 +4,21 @@ import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceNav } from "@/components/workspace/useWorkspaceNav";
-import { useNotesQuery, useCreateNote, warmAllNotes } from "@/lib/notes-query";
+import {
+  useNotesQuery,
+  useLocalNotesQuery,
+  useMigrateLocalNotes,
+  useCreateNote,
+  warmAllNotes,
+} from "@/lib/notes-query";
 import type { NoteRecord } from "@/lib/note-types";
 import { useWorkspaceStore, isNoteDirty } from "@/lib/store";
 import { WorkspaceContextProvider, type WorkspaceApi } from "@/components/workspace/WorkspaceContext";
 import { WorkspaceBuffer } from "@/components/workspace/WorkspaceBuffer";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { AppShell } from "@/components/shell/AppShell";
+import { DeviceTracking } from "@/components/shell/DeviceTracking";
+import { SyncingNotesToast } from "@/components/shell/SyncingNotesToast";
 
 function mostRecentOpenNote(notes: NoteRecord[]): NoteRecord | undefined {
   return notes
@@ -28,12 +36,21 @@ function mostRecentOpenNote(notes: NoteRecord[]): NoteRecord | undefined {
  * only takes over when the URL is outside `/notes*` (the Dashboard,
  * tags, settings...).
  */
-export function WorkspaceProvider({ email, children }: { email: string; children: ReactNode }) {
+export function WorkspaceProvider({
+  email,
+  children,
+}: {
+  email: string | null;
+  children: ReactNode;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const inNotesSection = pathname === "/notes" || pathname.startsWith("/notes/");
 
   const { data: notes } = useNotesQuery();
+  const currentUserId = useWorkspaceStore((s) => s.currentUserId);
+  useLocalNotesQuery(!email);
+  const migrationProgress = useMigrateLocalNotes(email, currentUserId);
   const { activeNoteId, open } = useWorkspaceNav();
   const createNote = useCreateNote();
   const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);
@@ -42,10 +59,14 @@ export function WorkspaceProvider({ email, children }: { email: string; children
 
   // Fired once, right after first paint: warms every note's content in one
   // batch rather than a serial per-note loop (see lib/notes-query.ts's
-  // warmAllNotes for the skip-dirty/stale-never-clobbers guarantees).
+  // warmAllNotes for the skip-dirty/stale-never-clobbers guarantees). Only
+  // meaningful for a Synced session -- a Local-only session's notes are
+  // already fully warm coming out of the Local store (useLocalNotesQuery
+  // above), and warmAllNotes's own server action would redirect it anyway.
   useEffect(() => {
-    void warmAllNotes(queryClient, isNoteDirty);
-  }, [queryClient]);
+    if (!email) return;
+    void warmAllNotes(queryClient, currentUserId, isNoteDirty);
+  }, [queryClient, email, currentUserId]);
 
   // The Dashboard (`/`) is the landing screen now, not a resolved buffer --
   // so nothing here auto-opens a note on bare `/notes` anymore. Leaving the
@@ -81,6 +102,8 @@ export function WorkspaceProvider({ email, children }: { email: string; children
 
   return (
     <WorkspaceContextProvider value={api}>
+      {!email && <DeviceTracking />}
+      <SyncingNotesToast total={migrationProgress.total} current={migrationProgress.current} />
       <Sidebar />
       <AppShell email={email}>{inNotesSection ? <WorkspaceBuffer /> : children}</AppShell>
     </WorkspaceContextProvider>

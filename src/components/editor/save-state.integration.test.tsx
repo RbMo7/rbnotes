@@ -55,6 +55,8 @@ function renderCommandHarness() {
         unshare: () => {},
         updateSettings: () => {},
         openSettings: () => {},
+        login: () => {},
+        logout: () => {},
       },
     };
     return { markDirty: () => markDirty("note-1"), ctx };
@@ -64,7 +66,9 @@ function renderCommandHarness() {
 describe("save-state transitions at the command seam", () => {
   beforeEach(() => {
     mocks.saveNoteContentAction.mockReset();
-    useWorkspaceStore.setState({ saveState: "clean", dirtyNoteIds: {} });
+    // This suite exercises the Synced (signed-in) save path specifically --
+    // syncEnabled defaults to false (Local-only) since the store fix.
+    useWorkspaceStore.setState({ saveState: "clean", dirtyNoteIds: {}, syncEnabled: true });
   });
 
   it(":w drives clean -> saving -> clean", async () => {

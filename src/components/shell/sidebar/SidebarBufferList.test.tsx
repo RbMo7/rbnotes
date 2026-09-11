@@ -15,6 +15,9 @@ vi.mock("@/components/workspace/WorkspaceContext", () => ({
 import { SidebarBufferList } from "@/components/shell/sidebar/SidebarBufferList";
 
 const now = new Date();
+const threeDaysAgo = new Date(now);
+threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
 const NOTES: NoteRecord[] = [
   {
     id: "1",
@@ -34,15 +37,25 @@ const NOTES: NoteRecord[] = [
     updatedAt: now.toISOString(),
     content: "",
   },
+  {
+    id: "3",
+    title: "this week note",
+    pinned: false,
+    archived: false,
+    createdAt: threeDaysAgo.toISOString(),
+    updatedAt: threeDaysAgo.toISOString(),
+    content: "",
+  },
 ];
 
 afterEach(cleanup);
 
 describe("SidebarBufferList", () => {
-  it("recency groups start open, ARCHIVE starts collapsed", () => {
+  it("only TODAY starts open -- THIS WEEK, EARLIER, and ARCHIVE all start collapsed", () => {
     render(<SidebarBufferList notes={NOTES} filter="" />);
 
     expect(screen.getByText("today-note.md")).toBeTruthy();
+    expect(screen.queryByText("this-week-note.md")).toBeNull();
     expect(screen.queryByText("old-archived-note.md")).toBeNull();
   });
 

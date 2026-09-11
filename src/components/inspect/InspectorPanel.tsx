@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { X } from "lucide-react";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 
@@ -28,6 +29,7 @@ function formatViewerTime(iso: string): string {
 export function InspectorPanel({
   open,
   onClose,
+  signedIn,
   loading,
   token,
   viewers,
@@ -37,6 +39,8 @@ export function InspectorPanel({
 }: {
   open: boolean;
   onClose: () => void;
+  /** Sharing needs an account (ADR 0002) -- false shows a sign-in notice instead of loading/fetching anything. */
+  signedIn: boolean;
   loading: boolean;
   token: string | null;
   viewers: ShareViewer[];
@@ -59,70 +63,86 @@ export function InspectorPanel({
         </button>
       </div>
 
-      <div className="p-space-4 border-b border-outline-variant/20 flex flex-col gap-space-2">
-        <div className="font-label-sm text-label-sm text-outline uppercase tracking-wider">
-          Share
-        </div>
-        {loading ? (
-          <p className="font-body-sm text-body-sm text-outline/50">~ loading</p>
-        ) : token ? (
-          <>
-            <button
-              onClick={onCopy}
-              className="text-left font-code-editor text-body-sm text-primary bg-surface-container px-space-2 py-space-2 truncate hover:bg-surface-container-high"
-              title="Click to copy"
-            >
-              /s/{token}
-            </button>
-            <button
-              onClick={onUnshare}
-              className="text-left font-label-sm text-label-sm text-error hover:underline"
-            >
-              :unshare
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={onShare}
-            className="w-full px-space-3 py-space-2 bg-primary text-on-primary font-label-md text-label-md hover:bg-primary-fixed-dim transition-colors"
-          >
-            :share — create link
-          </button>
-        )}
-      </div>
-
-      <div className="p-space-4 flex flex-col gap-space-2 flex-1">
-        <div className="font-label-sm text-label-sm text-outline uppercase tracking-wider">
-          Viewers · {viewers.length}
-        </div>
-        {viewers.length === 0 ? (
-          <p className="font-body-sm text-body-sm text-outline/30">~ no views yet</p>
-        ) : (
-          <div className="space-y-space-px">
-            {viewers.map((v) => (
-              <div
-                key={v.email}
-                className="flex items-center justify-between px-space-2 py-space-1 font-body-sm text-body-sm"
+      {signedIn ? (
+        <>
+          <div className="p-space-4 border-b border-outline-variant/20 flex flex-col gap-space-2">
+            <div className="font-label-sm text-label-sm text-outline uppercase tracking-wider">
+              Share
+            </div>
+            {loading ? (
+              <p className="font-body-sm text-body-sm text-outline/50">~ loading</p>
+            ) : token ? (
+              <>
+                <button
+                  onClick={onCopy}
+                  className="text-left font-code-editor text-body-sm text-primary bg-surface-container px-space-2 py-space-2 truncate hover:bg-surface-container-high"
+                  title="Click to copy"
+                >
+                  /s/{token}
+                </button>
+                <button
+                  onClick={onUnshare}
+                  className="text-left font-label-sm text-label-sm text-error hover:underline"
+                >
+                  :unshare
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={onShare}
+                className="w-full px-space-3 py-space-2 bg-primary text-on-primary font-label-md text-label-md hover:bg-primary-fixed-dim transition-colors"
               >
-                <span className="flex items-center gap-space-2 truncate">
-                  <span className="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-on-primary text-[10px] font-bold shrink-0">
-                    {v.email[0]?.toUpperCase()}
-                  </span>
-                  <span className="truncate text-on-surface-variant">{v.email}</span>
-                  {v.viewCount > 1 && (
-                    <span className="font-label-sm text-label-sm bg-surface-container-high text-outline px-1 shrink-0">
-                      ×{v.viewCount}
-                    </span>
-                  )}
-                </span>
-                <span className="font-label-sm text-label-sm text-outline/70 shrink-0">
-                  {formatViewerTime(v.lastViewedAt)}
-                </span>
-              </div>
-            ))}
+                :share — create link
+              </button>
+            )}
           </div>
-        )}
-      </div>
+
+          <div className="p-space-4 flex flex-col gap-space-2 flex-1">
+            <div className="font-label-sm text-label-sm text-outline uppercase tracking-wider">
+              Viewers · {viewers.length}
+            </div>
+            {viewers.length === 0 ? (
+              <p className="font-body-sm text-body-sm text-outline/30">~ no views yet</p>
+            ) : (
+              <div className="space-y-space-px">
+                {viewers.map((v) => (
+                  <div
+                    key={v.email}
+                    className="flex items-center justify-between px-space-2 py-space-1 font-body-sm text-body-sm"
+                  >
+                    <span className="flex items-center gap-space-2 truncate">
+                      <span className="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-on-primary text-[10px] font-bold shrink-0">
+                        {v.email[0]?.toUpperCase()}
+                      </span>
+                      <span className="truncate text-on-surface-variant">{v.email}</span>
+                      {v.viewCount > 1 && (
+                        <span className="font-label-sm text-label-sm bg-surface-container-high text-outline px-1 shrink-0">
+                          ×{v.viewCount}
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-label-sm text-label-sm text-outline/70 shrink-0">
+                      {formatViewerTime(v.lastViewedAt)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="p-space-4 flex flex-col gap-space-2">
+          <div className="font-label-sm text-label-sm text-outline uppercase tracking-wider">
+            Share
+          </div>
+          <p className="font-body-sm text-body-sm text-outline/70">
+            Local-only notes can&rsquo;t be shared.
+          </p>
+          <Link href="/login" className="text-primary hover:underline font-label-sm text-label-sm">
+            Sign in to share
+          </Link>
+        </div>
+      )}
     </>
   );
 

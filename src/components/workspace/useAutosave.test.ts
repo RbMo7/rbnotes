@@ -3,13 +3,28 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useWorkspaceStore } from "@/lib/store";
 
-const mocks = vi.hoisted(() => ({ saveNoteContentAction: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  saveNoteContentAction: vi.fn(),
+  getNote: vi.fn(),
+  setNote: vi.fn(),
+  markSynced: vi.fn(),
+}));
 
 vi.mock("@/server/actions/notes", () => ({
   saveNoteContentAction: mocks.saveNoteContentAction,
 }));
 
+vi.mock("@/lib/local-notes-store", () => ({
+  getNote: mocks.getNote,
+  setNote: mocks.setNote,
+  markSynced: mocks.markSynced,
+}));
+
 import { useAutosave } from "@/components/workspace/useAutosave";
+
+function setOnline(online: boolean) {
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: online });
+}
 
 function setup(activeNoteId: string | null, content: Record<string, string>) {
   return renderHook(
@@ -28,11 +43,17 @@ describe("useAutosave", () => {
     vi.useFakeTimers();
     mocks.saveNoteContentAction.mockReset();
     mocks.saveNoteContentAction.mockResolvedValue({ title: "t", updatedAt: "2026-01-01T00:00:00.000Z" });
-    useWorkspaceStore.setState({ saveState: "clean", dirtyNoteIds: {} });
+    mocks.getNote.mockReset().mockResolvedValue(undefined);
+    mocks.setNote.mockReset().mockResolvedValue(undefined);
+    mocks.markSynced.mockReset().mockResolvedValue(undefined);
+    setOnline(true);
+    useWorkspaceStore.setState({ saveState: "clean", dirtyNoteIds: {}, syncEnabled: true });
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    setOnline(true);
+    useWorkspaceStore.setState({ syncEnabled: true });
   });
 
   it("persists silently after a short idle with no explicit flush call", async () => {
@@ -144,5 +165,215 @@ describe("useAutosave", () => {
     });
     // Still on buffer b -- its status is untouched by a's background save.
     expect(useWorkspaceStore.getState().saveState).toBe("clean");
+  });
+
+  it("markDirty persists content to the Local store on a short debounce, independent of the server debounce", async () => {
+    const { result } = setup("a", { a: "hello" });
+    act(() => result.current.markDirty("a"));
+
+    expect(mocks.setNote).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.setNote).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "a", content: "hello", deleted: false }),
+    );
+  });
+
+  it("a rapid burst of edits writes to the Local store once, not once per keystroke", async () => {
+    const content: Record<string, string> = { a: "h" };
+    const { result } = setup("a", content);
+
+    for (const c of ["he", "hel", "hell", "hello"]) {
+      content.a = c;
+      act(() => result.current.markDirty("a"));
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+      });
+    }
+    expect(mocks.setNote).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.setNote).toHaveBeenCalledTimes(1);
+    expect(mocks.setNote).toHaveBeenCalledWith(expect.objectContaining({ content: "hello" }));
+  });
+
+  it("a forced flush (:w/Ctrl+S) persists locally immediately, without waiting for the local debounce", async () => {
+    const { result } = setup("a", { a: "hello" });
+    act(() => result.current.markDirty("a"));
+
+    await act(async () => {
+      await result.current.flush("a");
+    });
+
+    expect(mocks.setNote).toHaveBeenCalledWith(expect.objectContaining({ content: "hello" }));
+  });
+
+  it("a Local-only session (no sync) never calls the server -- local persistence is the save", async () => {
+    useWorkspaceStore.setState({ syncEnabled: false });
+    const { result } = setup("a", { a: "hello" });
+    act(() => result.current.markDirty("a"));
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.flush("a");
+    });
+
+    expect(ok).toBe(true);
+    expect(mocks.saveNoteContentAction).not.toHaveBeenCalled();
+    expect(mocks.markSynced).not.toHaveBeenCalled();
+    expect(useWorkspaceStore.getState().saveState).toBe("clean");
+  });
+
+  it("a Local-only session ignores navigator.onLine entirely -- offline is offline for everyone, but there's nothing to push anyway", async () => {
+    useWorkspaceStore.setState({ syncEnabled: false });
+    setOnline(false);
+    const { result } = setup("a", { a: "hello" });
+    act(() => result.current.markDirty("a"));
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.flush("a");
+    });
+
+    expect(ok).toBe(true);
+    expect(mocks.saveNoteContentAction).not.toHaveBeenCalled();
+  });
+
+  it("flush is skipped while offline -- stays dirty, never calls the server", async () => {
+    setOnline(false);
+    const { result } = setup("a", { a: "hello" });
+    act(() => result.current.markDirty("a"));
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.flush("a");
+    });
+
+    expect(ok).toBe(false);
+    expect(mocks.saveNoteContentAction).not.toHaveBeenCalled();
+    expect(result.current.isDirty("a")).toBe(true);
+    expect(useWorkspaceStore.getState().saveState).toBe("dirty");
+  });
+
+  it("a pending offline note flushes automatically once the browser 'online' event fires", async () => {
+    setOnline(false);
+    const { result } = setup("a", { a: "hello" });
+    act(() => result.current.markDirty("a"));
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+    expect(mocks.saveNoteContentAction).not.toHaveBeenCalled();
+
+    setOnline(true);
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.saveNoteContentAction).toHaveBeenCalledWith({ noteId: "a", content: "hello" });
+  });
+
+  it("a successful push records the Synced mark in the Local store", async () => {
+    const { result } = setup("a", { a: "hello" });
+    act(() => result.current.markDirty("a"));
+
+    await act(async () => {
+      await result.current.flush("a");
+    });
+
+    expect(mocks.markSynced).toHaveBeenCalledWith("a", "2026-01-01T00:00:00.000Z");
+  });
+
+  it("periodically retries a still-dirty note in the background", async () => {
+    setOnline(false);
+    const { result } = setup("a", { a: "hello" });
+    act(() => result.current.markDirty("a"));
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+    expect(mocks.saveNoteContentAction).not.toHaveBeenCalled();
+
+    setOnline(true);
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.saveNoteContentAction).toHaveBeenCalledWith({ noteId: "a", content: "hello" });
+  });
+
+  it("cancel drops a note's pending debounce -- it never fires, never resurrects a just-deleted note", async () => {
+    const { result } = setup("a", { a: "hello" });
+    act(() => result.current.markDirty("a"));
+    expect(result.current.isDirty("a")).toBe(true);
+
+    act(() => result.current.cancel("a"));
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await Promise.resolve();
+    });
+
+    expect(mocks.saveNoteContentAction).not.toHaveBeenCalled();
+    expect(mocks.setNote).not.toHaveBeenCalled();
+    // A cancelled note is forgotten entirely, not just "clean" -- isDirty
+    // for an id with no info entry reports false via the same fresh-entry
+    // path a note that was never touched would.
+    expect(result.current.isDirty("a")).toBe(false);
+  });
+
+  it("cancel on a note with no pending save is a harmless no-op", () => {
+    const { result } = setup("a", { a: "hello" });
+    expect(() => act(() => result.current.cancel("a"))).not.toThrow();
+  });
+
+  it("does not install the retry timer/online listener for a Local-only session -- nothing to retry", async () => {
+    useWorkspaceStore.setState({ syncEnabled: false });
+    const addSpy = vi.spyOn(window, "addEventListener");
+    setup("a", { a: "hello" });
+
+    expect(addSpy).not.toHaveBeenCalledWith("online", expect.any(Function));
+    addSpy.mockRestore();
+  });
+
+  it("installs the retry timer for a Synced session", () => {
+    const addSpy = vi.spyOn(window, "addEventListener");
+    setup("a", { a: "hello" });
+
+    expect(addSpy).toHaveBeenCalledWith("online", expect.any(Function));
+    addSpy.mockRestore();
+  });
+
+  it("registers a flushAllDirty callback into the shared store while mounted, and unregisters it on unmount", async () => {
+    const { unmount } = setup("a", { a: "hello" });
+    expect(useWorkspaceStore.getState().flushAllDirty).toBeTypeOf("function");
+
+    unmount();
+    expect(useWorkspaceStore.getState().flushAllDirty).toBeNull();
+  });
+
+  it("the registered flushAllDirty actually flushes every currently-dirty note", async () => {
+    const { result } = setup("a", { a: "hello" });
+    act(() => result.current.markDirty("a"));
+
+    await act(async () => {
+      await useWorkspaceStore.getState().flushAllDirty?.();
+    });
+
+    expect(mocks.saveNoteContentAction).toHaveBeenCalledWith({ noteId: "a", content: "hello" });
   });
 });

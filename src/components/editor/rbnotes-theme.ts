@@ -2,23 +2,38 @@ import { EditorView } from "@codemirror/view";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 
-// Ported 1:1 from the Stitch design tokens (src/app/globals.css), not
-// reinterpreted — CodeMirror's default theme must never show through.
+// CSS custom property references, not literal hex -- CodeMirror's
+// EditorView.theme()/HighlightStyle both emit real stylesheets via
+// style-mod, so a `var(--color-*)` string here is live CSS exactly like a
+// Tailwind bg-surface class is: it tracks whichever [data-theme="..."]
+// block is active (see globals.css), instead of freezing colors at
+// extension-creation time. (A hardcoded hex snapshot here previously meant
+// the editor's own background/text/syntax colors never responded to a
+// theme switch at all -- the surrounding chrome would repaint, but the
+// buffer itself stayed on the very first theme it was created under.)
 const colors = {
-  surfaceContainerLowest: "#0c0e10",
-  surfaceContainerLow: "#1a1c1e",
-  surfaceContainer: "#1e2022",
-  surfaceContainerHigh: "#282a2c",
-  onSurface: "#e2e2e5",
-  onSurfaceVariant: "#bccbb9",
-  outline: "#869585",
-  outlineVariant: "#3d4a3d",
-  primary: "#4be277",
-  onPrimary: "#003915",
-  secondary: "#b9c8de",
-  secondaryContainer: "#39485a",
-  tertiaryFixedDim: "#ffb4a9",
+  surfaceContainerLowest: "var(--color-surface-container-lowest)",
+  surfaceContainerLow: "var(--color-surface-container-low)",
+  surfaceContainer: "var(--color-surface-container)",
+  surfaceContainerHigh: "var(--color-surface-container-high)",
+  onSurface: "var(--color-on-surface)",
+  onSurfaceVariant: "var(--color-on-surface-variant)",
+  outline: "var(--color-outline)",
+  outlineVariant: "var(--color-outline-variant)",
+  primary: "var(--color-primary)",
+  onPrimary: "var(--color-on-primary)",
+  secondary: "var(--color-secondary)",
+  secondaryContainer: "var(--color-secondary-container)",
+  tertiaryFixedDim: "var(--color-tertiary-fixed-dim)",
 };
+
+// A hex-plus-alpha-suffix trick (`${hex}99`) only works on literal hex
+// strings -- can't concatenate onto a var() reference. color-mix() is the
+// live-CSS equivalent, and needs the percentage spelled out per call site
+// (the old suffixes: 99 -> 60%, 66 -> 40%, 40 -> 25%).
+function mix(varRef: string, percent: number): string {
+  return `color-mix(in srgb, ${varRef} ${percent}%, transparent)`;
+}
 
 /**
  * The full CM6 theme: JetBrains Mono at the `code-editor` type scale
@@ -52,7 +67,7 @@ export function rbnotesTheme(mode: "NORMAL" | "INSERT" | "VISUAL" | "EDIT" | "RO
       ".cm-line": { padding: "0 2px" },
       ".cm-gutters": {
         backgroundColor: colors.surfaceContainerLowest,
-        color: `${colors.outline}99`,
+        color: mix(colors.outline, 60),
         border: "none",
         minWidth: "4.5rem",
         paddingLeft: "0.75rem",
@@ -62,12 +77,12 @@ export function rbnotesTheme(mode: "NORMAL" | "INSERT" | "VISUAL" | "EDIT" | "RO
         textAlign: "right",
       },
       ".cm-activeLineGutter": {
-        backgroundColor: `${colors.surfaceContainerHigh}66`,
+        backgroundColor: mix(colors.surfaceContainerHigh, 40),
         color: colors.primary,
         fontWeight: "700",
       },
       ".cm-activeLine": {
-        backgroundColor: `${colors.surfaceContainerHigh}40`,
+        backgroundColor: mix(colors.surfaceContainerHigh, 25),
       },
       // Solid block cursor in NORMAL/VISUAL (real Vim feel); thin blinking
       // bar in INSERT — matches the two Stitch screenshots exactly.
@@ -89,14 +104,14 @@ export function rbnotesTheme(mode: "NORMAL" | "INSERT" | "VISUAL" | "EDIT" | "RO
         backgroundColor: `${colors.secondaryContainer} !important`,
       },
       ".cm-searchMatch": {
-        backgroundColor: `${colors.primary}40`,
+        backgroundColor: mix(colors.primary, 25),
       },
       ".cm-searchMatch.cm-searchMatch-selected": {
         backgroundColor: colors.primary,
         color: colors.onPrimary,
       },
       ".cm-placeholder": {
-        color: `${colors.onSurfaceVariant}66`,
+        color: mix(colors.onSurfaceVariant, 40),
       },
       // We mount vim() with `status: false` (our own statusline replaces its
       // built-in one), so .cm-vim-panel is NEVER used for a persistent

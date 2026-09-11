@@ -13,7 +13,7 @@ export function AppShell({
   email,
   children,
 }: {
-  email: string;
+  email: string | null;
   children: ReactNode;
 }) {
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);

@@ -64,6 +64,10 @@ export const searchNotesSchema = z.object({
   query: z.string().min(1).max(200),
 });
 
+export const pingDeviceSchema = z.object({
+  deviceId: z.uuid(),
+});
+
 // --- Settings ---------------------------------------------------------------
 
 export const settingsSchema = z.object({
@@ -72,6 +76,7 @@ export const settingsSchema = z.object({
   wordWrap: z.boolean().default(true),
   autosave: z.boolean().default(true),
   sidebarCollapsed: z.boolean().default(false),
+  theme: z.enum(["hacker", "dark", "light"]).default("hacker"),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;

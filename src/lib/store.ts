@@ -99,6 +99,38 @@ type WorkspaceState = {
   settings: Settings;
   setSettings: (settings: Settings) => void;
   updateSettings: (patch: Partial<Settings>) => void;
+
+  // Whether this session is Synced (CONTEXT.md) -- signed in -- vs.
+  // Local-only (anonymous). Seeded from the server (SettingsHydrator,
+  // alongside settings), and kept in sync via SettingsHydrator's effect on
+  // every later change too (e.g. sign-out, which is a soft route refresh,
+  // not a remount) -- so notes-query.ts and useAutosave can read it
+  // without prop-drilling `email` through every consumer of the shared
+  // notes cache. Defaults false (Local-only): the dangerous direction is
+  // defaulting to true, which would let something read it before the
+  // hydrator runs and attempt a real server push for a session that's
+  // actually anonymous, hitting getAuthedUser()'s redirect("/login").
+  syncEnabled: boolean;
+  setSyncEnabled: (syncEnabled: boolean) => void;
+
+  // The Synced session's account id (LocalNote's `ownerId`, CONTEXT.md) --
+  // null for Local-only. Seeded and kept in sync the same way as
+  // syncEnabled, from the same SettingsHydrator effect. Used wherever a
+  // local record needs to be tagged with, or checked against, the account
+  // that owns it (useCreateNote, useAutosave's local mirror, warmAllNotes,
+  // sign-out's purge).
+  currentUserId: string | null;
+  setCurrentUserId: (currentUserId: string | null) => void;
+
+  // A live, app-wide "flush every currently-dirty note" hook, registered
+  // by whichever useAutosave instance is mounted (WorkspaceBuffer) -- the
+  // same registration pattern saveActive/registerActiveSave already uses
+  // for Ctrl+S. useSignOut reads this to make a best-effort attempt at
+  // pushing pending edits before actually signing out; null when no
+  // buffer (and so no autosave engine) is mounted, in which case there's
+  // nothing dirty to flush anyway.
+  flushAllDirty: (() => Promise<void>) | null;
+  registerFlushAllDirty: (flushAllDirty: (() => Promise<void>) | null) => void;
 };
 
 /**
@@ -173,6 +205,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   settings: defaultSettings,
   setSettings: (settings) => set({ settings }),
   updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+
+  syncEnabled: false,
+  setSyncEnabled: (syncEnabled) => set({ syncEnabled }),
+
+  currentUserId: null,
+  setCurrentUserId: (currentUserId) => set({ currentUserId }),
+
+  flushAllDirty: null,
+  registerFlushAllDirty: (flushAllDirty) => set({ flushAllDirty }),
 }));
 
 /**

@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { EditorState, EditorSelection, Compartment, type Extension } from "@codemirror/state";
-import { EditorView, keymap, drawSelection } from "@codemirror/view";
+import { EditorView, keymap, drawSelection, placeholder } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { searchKeymap } from "@codemirror/search";
 import { vim, getCM, Vim } from "@replit/codemirror-vim";
@@ -304,6 +304,14 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       drawSelection(),
       rbnotesMarkdown,
       rbnotesMarkdownHighlight,
+      // A note's title is its first `# heading` (lib/markdown-title.ts) --
+      // there's no separate title field to fill in, which isn't obvious
+      // the first time a blank "untitled" note opens. CodeMirror's own
+      // placeholder() only shows while the doc is genuinely empty and
+      // clears itself the instant anything is typed -- no extra state to
+      // track, and it never survives a save/reload since content is no
+      // longer "".
+      placeholder("# Title\n\nStart typing — the first # heading becomes the note's title."),
       livePreview(previewModeRef),
       gutterCompartment.of(lineNumberGutter(readOnly ? "absolute" : settings.lineNumbers)),
       wrapCompartment.of(settings.wordWrap ? EditorView.lineWrapping : []),

@@ -9,14 +9,15 @@ import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { useNotesQuery } from "@/lib/notes-query";
 import { displayFilename } from "@/lib/format";
-import { signOutAction } from "@/server/actions/auth";
+import { useSignOut } from "@/lib/use-sign-out";
+import { LocalOnlyBadge } from "@/components/shell/LocalOnlyBadge";
 
 const SECTION_TITLES: Record<string, string> = {
   "/": "Dashboard",
   "/settings": "Settings",
 };
 
-export function TopBar({ email }: { email: string }) {
+export function TopBar({ email }: { email: string | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const isDesktop = useIsDesktop();
@@ -27,6 +28,7 @@ export function TopBar({ email }: { email: string }) {
   const { data: notes } = useNotesQuery();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const signOut = useSignOut();
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -89,6 +91,7 @@ export function TopBar({ email }: { email: string }) {
         </span>
       </div>
       <div className="flex items-center gap-space-3 shrink-0">
+        {!email && <LocalOnlyBadge />}
         <div className="flex items-center gap-space-2 text-on-surface-variant font-label-sm text-label-sm bg-surface-container px-space-2 py-space-1 rounded">
           <GitCommitHorizontal size={14} strokeWidth={1.5} />
           <span>main</span>
@@ -113,23 +116,36 @@ export function TopBar({ email }: { email: string }) {
           {menuOpen && (
             <div className="absolute right-0 mt-space-2 w-56 bg-surface-container-high border border-outline-variant shadow-2xl z-50 py-space-2">
               <div className="px-space-3 py-space-2 font-label-sm text-label-sm text-outline border-b border-outline-variant truncate">
-                {email}
+                {email ?? "Local only"}
               </div>
-              <Link
-                href="/settings"
-                className="block px-space-3 py-space-2 font-body-sm text-body-sm text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface"
-                onClick={() => setMenuOpen(false)}
-              >
-                Settings [:set]
-              </Link>
-              <form action={signOutAction}>
-                <button
-                  type="submit"
-                  className="w-full text-left px-space-3 py-space-2 font-body-sm text-body-sm text-error hover:bg-surface-container-highest"
+              {email ? (
+                <>
+                  <Link
+                    href="/settings"
+                    className="block px-space-3 py-space-2 font-body-sm text-body-sm text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Settings [:set]
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      signOut();
+                    }}
+                    className="w-full text-left px-space-3 py-space-2 font-body-sm text-body-sm text-error hover:bg-surface-container-highest"
+                  >
+                    Sign out [:q!]
+                  </button>
+                </>
+              ) : (
+                <Link
+                  href="/login"
+                  className="block px-space-3 py-space-2 font-body-sm text-body-sm text-primary hover:bg-surface-container-highest"
+                  onClick={() => setMenuOpen(false)}
                 >
-                  Sign out [:q!]
-                </button>
-              </form>
+                  Sign in to sync
+                </Link>
+              )}
             </div>
           )}
         </div>

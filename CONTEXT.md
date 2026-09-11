@@ -48,6 +48,35 @@ _Avoid_: save button, manual save
 The `:`-command surface of the shell (writes, new notes, etc.).
 _Avoid_: command bar, terminal
 
+### Storage & sync
+
+**Local-only note**:
+A note that lives only in the browser's storage and never reaches the server. The default for any anonymous session — free, frictionless, no sign-in required.
+_Avoid_: offline note, unsynced note
+
+**Synced note**:
+A note owned by a signed-in account. Edited the same way as a Local-only note — same storage, same Autosave — but a Synced note also pushes to the server, one direction only, on top of the local copy. Signing in is what turns Local-only notes into Synced notes, not a separate save mode.
+_Avoid_: online note, paid note, cloud note
+
+**Edited mark**:
+Client-side timestamp set on every change, the instant it happens. Never waits on network, never blocked by being offline.
+_Avoid_: last updated
+
+**Synced mark**:
+Server-confirmed timestamp, set only once a push to the server actually lands. Behind the Edited mark means the change hasn't reached the server yet — normal while offline, not an error.
+_Avoid_: updated timestamp
+
+**Tombstone**:
+A note marked deleted locally but not yet purged. Deletes travel through the same push as any other edit — a note can never vanish locally before the server has had the chance to see it deleted too.
+
+**Owner**:
+The account (or `null`, for genuinely Local-only) that created or last owns a note's local copy. Distinct from Synced/unsynced: an unsynced note created while signed in still has an Owner — it just hasn't reached the server yet. Deciding who a local note may sync into, or be cleared from, by *Synced-vs-unsynced* alone conflates two different questions and was a real cross-account leak; Owner is what actually answers "whose is this."
+_Avoid_: userId (when talking about a local note's origin — say Owner instead)
+
+**Device**:
+An anonymous, local-only browser install — never a person. Only tracked to count free-tier usage (first seen / last seen); carries no note content and no identity until the browser signs in.
+_Avoid_: anonymous user, visitor
+
 ### Mobile
 
 **Action menu**:

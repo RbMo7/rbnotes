@@ -1,16 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useIsDesktop } from "@/lib/use-is-desktop";
-import { pickRandomQuote } from "@/lib/quotes";
-import { signOutAction } from "@/server/actions/auth";
-import { QuoteBanner } from "@/components/dashboard/QuoteBanner";
+import { useSignOut } from "@/lib/use-sign-out";
+import { DashboardStats } from "@/components/dashboard/DashboardStats";
 import { RecentNotesList } from "@/components/dashboard/RecentNotesList";
 import { ShortcutCheatsheet } from "@/components/dashboard/ShortcutCheatsheet";
 import { SidebarLists } from "@/components/shell/sidebar/SidebarLists";
+import { LocalOnlyBadge } from "@/components/shell/LocalOnlyBadge";
 
 /**
  * The landing screen (`/`), shown on every fresh load per CONTEXT.md's
@@ -22,10 +21,10 @@ import { SidebarLists } from "@/components/shell/sidebar/SidebarLists";
  * on mobile since Sidebar itself is desktop-only there, so it's folded into
  * this same route instead of a separate screen or component tree.
  */
-export function Dashboard({ email }: { email: string }) {
+export function Dashboard({ email }: { email: string | null }) {
   const { createAndOpenNote } = useWorkspace();
   const isDesktop = useIsDesktop();
-  const quote = useMemo(() => pickRandomQuote(), []);
+  const signOut = useSignOut();
 
   if (isDesktop === false) {
     return (
@@ -50,17 +49,21 @@ export function Dashboard({ email }: { email: string }) {
         </div>
 
         <div className="shrink-0 px-space-4 py-space-3 border-t border-outline-variant/20 flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
-          <span className="truncate max-w-[10rem]">{email}</span>
-          <div className="flex items-center gap-space-3">
-            <Link href="/settings" className="text-primary hover:underline">
-              settings
-            </Link>
-            <form action={signOutAction}>
-              <button type="submit" className="text-error hover:underline">
-                sign out
-              </button>
-            </form>
-          </div>
+          {email ? (
+            <>
+              <span className="truncate max-w-[10rem]">{email}</span>
+              <div className="flex items-center gap-space-3">
+                <Link href="/settings" className="text-primary hover:underline">
+                  settings
+                </Link>
+                <button onClick={signOut} className="text-error hover:underline">
+                  sign out
+                </button>
+              </div>
+            </>
+          ) : (
+            <LocalOnlyBadge />
+          )}
         </div>
       </div>
     );
@@ -71,7 +74,7 @@ export function Dashboard({ email }: { email: string }) {
       <div className="w-full max-w-2xl flex flex-col items-center gap-space-6">
         <div className="flex flex-col items-center gap-space-2">
           <Image src="/logo.svg" alt="RbNotes" width={40} height={40} className="h-10 w-auto" />
-          <QuoteBanner quote={quote} />
+          <DashboardStats />
         </div>
 
         <RecentNotesList />
@@ -86,15 +89,19 @@ export function Dashboard({ email }: { email: string }) {
           </button>
 
           <div className="flex items-center gap-space-3 font-label-sm text-label-sm text-on-surface-variant">
-            <span className="truncate max-w-[10rem]">{email}</span>
-            <Link href="/settings" className="text-primary hover:underline">
-              settings
-            </Link>
-            <form action={signOutAction}>
-              <button type="submit" className="text-error hover:underline">
-                sign out
-              </button>
-            </form>
+            {email ? (
+              <>
+                <span className="truncate max-w-[10rem]">{email}</span>
+                <Link href="/settings" className="text-primary hover:underline">
+                  settings
+                </Link>
+                <button onClick={signOut} className="text-error hover:underline">
+                  sign out
+                </button>
+              </>
+            ) : (
+              <LocalOnlyBadge />
+            )}
           </div>
         </div>
 

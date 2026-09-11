@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import type { NoteRecord } from "@/lib/note-types";
 import { useWorkspaceStore } from "@/lib/store";
@@ -15,8 +15,9 @@ const NOTES: NoteRecord[] = [
 ];
 
 const openNote = vi.fn();
+const mockUseNotesQuery = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/notes-query", () => ({ useNotesQuery: () => ({ data: NOTES }) }));
+vi.mock("@/lib/notes-query", () => ({ useNotesQuery: mockUseNotesQuery }));
 vi.mock("@/components/workspace/WorkspaceContext", () => ({
   useWorkspace: () => ({
     activeNoteId: null,
@@ -35,6 +36,26 @@ afterEach(() => {
 });
 
 describe("RecentNotesList", () => {
+  beforeEach(() => {
+    mockUseNotesQuery.mockReturnValue({ data: NOTES });
+  });
+
+  it("with zero notes at all, invites creating the first one instead of claiming there's no match", () => {
+    mockUseNotesQuery.mockReturnValue({ data: [] });
+    render(<RecentNotesList />);
+    expect(screen.getByText(/no notes yet/)).toBeTruthy();
+    expect(screen.queryByText("~ no matches")).toBeNull();
+  });
+
+  it("with notes but a filter matching none, says no matches -- not the empty-account message", () => {
+    render(<RecentNotesList />);
+    fireEvent.change(screen.getByLabelText("Filter recent notes or search all notes"), {
+      target: { value: "zzz-nonexistent" },
+    });
+    expect(screen.getByText("~ no matches")).toBeTruthy();
+    expect(screen.queryByText(/no notes yet/)).toBeNull();
+  });
+
   it("caps at 8 most-recent non-archived notes", () => {
     render(<RecentNotesList />);
     expect(screen.getByText("note-0.md")).toBeTruthy();

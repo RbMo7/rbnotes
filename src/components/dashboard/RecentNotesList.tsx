@@ -135,7 +135,14 @@ export function RecentNotesList() {
         aria-label="Recent notes"
         className="flex flex-col gap-space-px outline-none"
       >
-        {filtered.length === 0 && (
+        {filtered.length === 0 && recent.length === 0 && (
+          <p className="px-space-2 py-space-4 text-center font-body-sm text-body-sm text-outline/50">
+            ~ no notes yet -- press{" "}
+            <span className="text-primary">+ New note</span> or{" "}
+            <span className="text-primary">^N</span>
+          </p>
+        )}
+        {filtered.length === 0 && recent.length > 0 && (
           <p className="px-space-2 py-space-4 text-center font-body-sm text-body-sm text-outline/50">
             ~ no matches
           </p>

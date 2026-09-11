@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import type { NoteRecord } from "@/lib/note-types";
 
 const NOTES: NoteRecord[] = [
@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 describe("Dashboard", () => {
-  it("renders the desktop landing screen (quote + recent notes) at desktop widths", () => {
+  it("renders the desktop landing screen (stats + recent notes) at desktop widths", () => {
     render(<Dashboard email="a@b.com" />);
     expect(screen.getByText("shipping-plan.md")).toBeTruthy();
   });
@@ -48,6 +48,9 @@ describe("Dashboard", () => {
     render(<Dashboard email="a@b.com" />);
 
     // SidebarLists' buffer tab, folded into the Dashboard route on mobile.
+    // The fixture note is months old, so it lands in EARLIER, which -- like
+    // every non-TODAY group -- starts collapsed; open it first.
+    fireEvent.click(screen.getByText("EARLIER"));
     expect(screen.getByText("shipping-plan.md")).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Tags" })).toBeTruthy();
   });
