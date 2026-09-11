@@ -184,7 +184,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setSettings: (settings) => set({ settings }),
   updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
 
-  syncEnabled: true,
+  // false until SettingsHydrator's lazy useState initializer corrects it
+  // from the real session -- Local-only is the safe default while that
+  // hasn't run yet (first paint, a stray re-mount, dev Fast Refresh). The
+  // dangerous direction is defaulting to true: useAutosave would then
+  // attempt a real server push for a session that's actually anonymous,
+  // which hits getAuthedUser()'s redirect("/login").
+  syncEnabled: false,
   setSyncEnabled: (syncEnabled) => set({ syncEnabled }),
 }));
 
