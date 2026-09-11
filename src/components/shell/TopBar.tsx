@@ -9,7 +9,7 @@ import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { useNotesQuery } from "@/lib/notes-query";
 import { displayFilename } from "@/lib/format";
-import { signOutAction } from "@/server/actions/auth";
+import { useSignOut } from "@/lib/use-sign-out";
 import { LocalOnlyBadge } from "@/components/shell/LocalOnlyBadge";
 
 const SECTION_TITLES: Record<string, string> = {
@@ -28,6 +28,7 @@ export function TopBar({ email }: { email: string | null }) {
   const { data: notes } = useNotesQuery();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const signOut = useSignOut();
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -126,14 +127,15 @@ export function TopBar({ email }: { email: string | null }) {
                   >
                     Settings [:set]
                   </Link>
-                  <form action={signOutAction}>
-                    <button
-                      type="submit"
-                      className="w-full text-left px-space-3 py-space-2 font-body-sm text-body-sm text-error hover:bg-surface-container-highest"
-                    >
-                      Sign out [:q!]
-                    </button>
-                  </form>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      signOut();
+                    }}
+                    className="w-full text-left px-space-3 py-space-2 font-body-sm text-body-sm text-error hover:bg-surface-container-highest"
+                  >
+                    Sign out [:q!]
+                  </button>
                 </>
               ) : (
                 <Link

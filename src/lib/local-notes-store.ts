@@ -96,6 +96,20 @@ export async function purgeNote(id: string): Promise<void> {
   await safeDel(id, store);
 }
 
+/**
+ * Removes every Synced note's local copy -- called on sign-out so a
+ * previous account's notes don't linger in this browser's storage once
+ * it's back to being an anonymous session. Local-only notes (syncedAt
+ * still null -- never pushed) are untouched: they're this browser's own
+ * data, independent of any account, and sign-out must never lose them.
+ */
+export async function purgeSyncedNotes(): Promise<void> {
+  const all = await safeValues<LocalNote>(store);
+  await Promise.all(
+    all.filter((n) => n.syncedAt !== null).map((n) => safeDel(n.id, store)),
+  );
+}
+
 /** Records a successful push to the server without touching any other field. */
 export async function markSynced(id: string, syncedAt: string): Promise<void> {
   const existing = await safeGet<LocalNote>(id, store);

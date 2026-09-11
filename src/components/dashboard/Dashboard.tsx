@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { pickRandomQuote, type Quote } from "@/lib/quotes";
-import { signOutAction } from "@/server/actions/auth";
+import { useSignOut } from "@/lib/use-sign-out";
 import { QuoteBanner } from "@/components/dashboard/QuoteBanner";
 import { RecentNotesList } from "@/components/dashboard/RecentNotesList";
 import { ShortcutCheatsheet } from "@/components/dashboard/ShortcutCheatsheet";
@@ -26,6 +26,7 @@ import { LocalOnlyBadge } from "@/components/shell/LocalOnlyBadge";
 export function Dashboard({ email }: { email: string | null }) {
   const { createAndOpenNote } = useWorkspace();
   const isDesktop = useIsDesktop();
+  const signOut = useSignOut();
   // Picked client-side only, after mount: Math.random() during SSR and
   // again on the client's first render pick different quotes, which is a
   // hydration mismatch (server-rendered text != client text). Deferring to
@@ -67,11 +68,9 @@ export function Dashboard({ email }: { email: string | null }) {
                 <Link href="/settings" className="text-primary hover:underline">
                   settings
                 </Link>
-                <form action={signOutAction}>
-                  <button type="submit" className="text-error hover:underline">
-                    sign out
-                  </button>
-                </form>
+                <button onClick={signOut} className="text-error hover:underline">
+                  sign out
+                </button>
               </div>
             </>
           ) : (
@@ -108,11 +107,9 @@ export function Dashboard({ email }: { email: string | null }) {
                 <Link href="/settings" className="text-primary hover:underline">
                   settings
                 </Link>
-                <form action={signOutAction}>
-                  <button type="submit" className="text-error hover:underline">
-                    sign out
-                  </button>
-                </form>
+                <button onClick={signOut} className="text-error hover:underline">
+                  sign out
+                </button>
               </>
             ) : (
               <LocalOnlyBadge />
