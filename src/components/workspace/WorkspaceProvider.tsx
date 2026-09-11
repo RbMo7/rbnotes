@@ -48,8 +48,9 @@ export function WorkspaceProvider({
   const inNotesSection = pathname === "/notes" || pathname.startsWith("/notes/");
 
   const { data: notes } = useNotesQuery();
+  const currentUserId = useWorkspaceStore((s) => s.currentUserId);
   useLocalNotesQuery(!email);
-  const migrationProgress = useMigrateLocalNotes(email);
+  const migrationProgress = useMigrateLocalNotes(email, currentUserId);
   const { activeNoteId, open } = useWorkspaceNav();
   const createNote = useCreateNote();
   const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);
@@ -64,8 +65,8 @@ export function WorkspaceProvider({
   // above), and warmAllNotes's own server action would redirect it anyway.
   useEffect(() => {
     if (!email) return;
-    void warmAllNotes(queryClient, isNoteDirty);
-  }, [queryClient, email]);
+    void warmAllNotes(queryClient, currentUserId, isNoteDirty);
+  }, [queryClient, email, currentUserId]);
 
   // The Dashboard (`/`) is the landing screen now, not a resolved buffer --
   // so nothing here auto-opens a note on bare `/notes` anymore. Leaving the

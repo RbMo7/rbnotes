@@ -6,10 +6,16 @@ import {
   getAllNotesMetaAction,
   getAllNoteContentsAction,
   saveNoteContentAction,
+  setNoteFlagsAction,
 } from "@/server/actions/notes";
 import { notesQueryKey, type NoteRecord } from "@/lib/note-types";
 import { useWorkspaceStore } from "@/lib/store";
-import { listNotes, setNote as setLocalNote, markSynced as markLocalSynced } from "@/lib/local-notes-store";
+import {
+  listNotes,
+  getNote as getLocalNote,
+  setNote as setLocalNote,
+  isMigratable,
+} from "@/lib/local-notes-store";
 
 export type { NoteRecord };
 
@@ -83,26 +89,42 @@ export function useLocalNotesQuery(enabled: boolean) {
 }
 
 /**
- * The other direction from useLocalNotesQuery: on sign-in, any Local-only
- * note never pushed to the server (syncedAt === null in the Local store --
- * i.e. created or last edited before this browser had an account) gets
+ * The other direction from useLocalNotesQuery: on sign-in, every local
+ * note that's still unsynced AND eligible to adopt into this account
+ * (isMigratable -- genuinely anonymous-origin, or this same account's own
+ * previously-stranded unsynced note from an earlier sign-out on this
+ * device; NEVER a different account's note, regardless of syncedAt) gets
  * pushed now, adopting it into the Synced set under the same client-
- * generated id it's always had. Spec story #15: "signing in starts syncing
- * my existing local notes, so upgrading doesn't feel like starting over."
- * Naturally idempotent -- once pushed, syncedAt is set, so a later mount
- * (e.g. reloading while still signed in) finds nothing left to migrate.
+ * generated id it's always had. Both conditions matter: isMigratable
+ * alone only answers "is this account allowed to," not "does it still
+ * need to" -- an already-synced same-account note would otherwise get
+ * needlessly re-pushed every time this effect re-runs. Spec story #15:
+ * "signing in starts syncing my existing local notes, so upgrading
+ * doesn't feel like starting over." Naturally idempotent -- once pushed,
+ * syncedAt is set (and ownerId is this
+ * account), so a later mount (e.g. reloading while still signed in)
+ * finds nothing left to migrate.
+ *
+ * Also carries pinned/archived along via a follow-up setNoteFlagsAction --
+ * saveNoteContentAction alone only ever sets content, so without this a
+ * Local-only note that was pinned or archived would arrive in the account
+ * with neither flag, quietly resetting the user's own organization.
+ * createdAt is not carried (out of scope -- cosmetic only, see spec).
  *
  * Returns migration progress so the caller can show it -- this used to run
  * silently, which for anyone with more than a couple of local notes just
  * looked like nothing happened (or worse, like the notes were gone) for
  * however long the pushes took.
  */
-export function useMigrateLocalNotes(email: string | null): { total: number; current: number } {
+export function useMigrateLocalNotes(
+  email: string | null,
+  currentUserId: string | null,
+): { total: number; current: number } {
   const { addNote } = useNotesMutations();
   const [progress, setProgress] = useState({ total: 0, current: 0 });
 
   useEffect(() => {
-    if (!email) return;
+    if (!email || !currentUserId) return;
     // Dev Strict Mode mounts every effect twice; without this guard, both
     // runs see the same not-yet-synced note (the first run's markLocalSynced
     // hasn't landed yet) and both push it, producing a duplicate cache entry
@@ -110,16 +132,32 @@ export function useMigrateLocalNotes(email: string | null): { total: number; cur
     let cancelled = false;
     void (async () => {
       const local = await listNotes();
-      const unsynced = local.filter((note) => note.syncedAt === null);
-      if (unsynced.length === 0) return;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setProgress({ total: unsynced.length, current: 0 });
-      for (const n of unsynced) {
+      // isMigratable alone only answers "is this account allowed to adopt
+      // it" (ownership) -- an already-synced note owned by this same
+      // account would pass that check every time this effect re-runs,
+      // needlessly re-pushing it. syncedAt === null is what actually
+      // means "still needs migrating."
+      const migratable = local.filter(
+        (note) => note.syncedAt === null && isMigratable(note, currentUserId),
+      );
+      if (migratable.length === 0) return;
+      setProgress({ total: migratable.length, current: 0 });
+      for (const n of migratable) {
         if (cancelled) return;
         try {
           const result = await saveNoteContentAction({ noteId: n.id, content: n.content });
           if (cancelled) return;
-          await markLocalSynced(n.id, result.updatedAt);
+          if (n.pinned || n.archived) {
+            await setNoteFlagsAction({ noteId: n.id, pinned: n.pinned, archived: n.archived });
+          }
+          // Not just markSynced(id, updatedAt) -- a note adopted from
+          // ownerId: null must become owned by this account now. Leaving
+          // it null would make isMigratable true again on a *different*
+          // account's later sign-in on this device (it's already synced
+          // to account A, but a stale null ownerId would let account B
+          // "adopt" it too), and isPurgeable would never match it on this
+          // account's own future sign-out (still reads as unowned).
+          await setLocalNote({ ...n, ownerId: currentUserId, syncedAt: result.updatedAt });
           addNote({
             id: n.id,
             title: result.title,
@@ -139,7 +177,7 @@ export function useMigrateLocalNotes(email: string | null): { total: number; cur
     return () => {
       cancelled = true;
     };
-  }, [email, addNote]);
+  }, [email, currentUserId, addNote]);
 
   return progress;
 }
@@ -162,6 +200,7 @@ export function isFullyWarm(notes: NoteRecord[]): boolean {
  */
 export async function warmAllNotes(
   queryClient: QueryClient,
+  currentUserId: string | null,
   isDirty?: (noteId: string) => boolean,
 ): Promise<void> {
   const before = queryClient.getQueryData<NoteRecord[]>(notesQueryKey) ?? [];
@@ -197,17 +236,31 @@ export async function warmAllNotes(
   // actually lost server-side. syncedAt = updatedAt because this content
   // just came from the server -- it's synced by definition.
   for (const n of newlyWarmed) {
-    void setLocalNote({
-      id: n.id,
-      title: n.title,
-      content: n.content ?? "",
-      pinned: n.pinned,
-      archived: n.archived,
-      createdAt: n.createdAt,
-      editedAt: n.updatedAt,
-      syncedAt: n.updatedAt,
-      deleted: false,
-    });
+    void (async () => {
+      // Stale-overwrite guard: if the Local store already has this note
+      // with genuine unpushed changes (editedAt newer than its own
+      // syncedAt, or never synced at all), this server content is OLDER
+      // than what's sitting locally -- e.g. a previous session's push
+      // failed and never retried. Overwriting it here would silently
+      // discard those local edits. Skip the mirror write for this note;
+      // the local version stays authoritative until it actually syncs.
+      const existing = await getLocalNote(n.id);
+      if (existing && (existing.syncedAt === null || existing.editedAt > existing.syncedAt)) {
+        return;
+      }
+      await setLocalNote({
+        id: n.id,
+        title: n.title,
+        content: n.content ?? "",
+        pinned: n.pinned,
+        archived: n.archived,
+        createdAt: n.createdAt,
+        editedAt: n.updatedAt,
+        syncedAt: n.updatedAt,
+        deleted: false,
+        ownerId: currentUserId,
+      });
+    })();
   }
 }
 
@@ -278,6 +331,16 @@ export function useNotesMutations() {
  * store for a Local-only session) would race it and wipe it straight back
  * out of the cache. A note has to exist in the Local store from birth for
  * the same reason a client-generated id does.
+ *
+ * ownerId is read imperatively (useWorkspaceStore.getState(), matching
+ * how syncEnabled is already read elsewhere -- e.g. use-note-operations.ts's
+ * deleteNote) rather than taken as a hook argument, so this stays a
+ * no-argument callback at every existing call site. Tags the new note as
+ * this account's own (or null for Local-only) from birth -- without this,
+ * a note created while Synced would be indistinguishable from a genuinely
+ * anonymous one, which is exactly the ambiguity that let one account's
+ * unsynced note leak into a different account signing in on the same
+ * device (see LocalNote's ownerId doc and the ADR 0002 amendment).
  */
 export function useCreateNote() {
   const { addNote } = useNotesMutations();
@@ -304,6 +367,7 @@ export function useCreateNote() {
       editedAt: now,
       syncedAt: null,
       deleted: false,
+      ownerId: useWorkspaceStore.getState().currentUserId,
     });
     return note.id;
   }, [addNote]);

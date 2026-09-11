@@ -10,7 +10,9 @@ const mocks = vi.hoisted(() => ({
   getAllNoteContentsAction: vi.fn(),
   getAllNotesMetaAction: vi.fn(),
   saveNoteContentAction: vi.fn(),
+  setNoteFlagsAction: vi.fn(),
   listNotes: vi.fn(),
+  getLocalNote: vi.fn(),
   setLocalNote: vi.fn(),
   markLocalSynced: vi.fn(),
 }));
@@ -19,13 +21,22 @@ vi.mock("@/server/actions/notes", () => ({
   getAllNoteContentsAction: mocks.getAllNoteContentsAction,
   getAllNotesMetaAction: mocks.getAllNotesMetaAction,
   saveNoteContentAction: mocks.saveNoteContentAction,
+  setNoteFlagsAction: mocks.setNoteFlagsAction,
 }));
 
-vi.mock("@/lib/local-notes-store", () => ({
-  listNotes: mocks.listNotes,
-  setNote: mocks.setLocalNote,
-  markSynced: mocks.markLocalSynced,
-}));
+// isMigratable/isPurgeable keep their real implementation (they're pure
+// and already covered directly by local-notes-store.test.ts) -- only the
+// I/O functions are replaced with test doubles.
+vi.mock("@/lib/local-notes-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/local-notes-store")>();
+  return {
+    ...actual,
+    listNotes: mocks.listNotes,
+    getNote: mocks.getLocalNote,
+    setNote: mocks.setLocalNote,
+    markSynced: mocks.markLocalSynced,
+  };
+});
 
 import {
   warmAllNotes,
@@ -52,9 +63,13 @@ function setup(notes: NoteRecord[]) {
   return queryClient;
 }
 
+const OWNER = "user-1";
+
 describe("warmAllNotes", () => {
   beforeEach(() => {
     mocks.getAllNoteContentsAction.mockReset();
+    mocks.getLocalNote.mockReset().mockResolvedValue(undefined);
+    mocks.setLocalNote.mockReset();
   });
 
   it("fetches every cold note's content in a single request and writes it as a real string, not absent", async () => {
@@ -64,7 +79,7 @@ describe("warmAllNotes", () => {
       { id: "b", content: "world" },
     ]);
 
-    await warmAllNotes(queryClient);
+    await warmAllNotes(queryClient, OWNER);
 
     expect(mocks.getAllNoteContentsAction).toHaveBeenCalledOnce();
     const notes = queryClient.getQueryData<NoteRecord[]>(notesQueryKey)!;
@@ -76,7 +91,7 @@ describe("warmAllNotes", () => {
     const queryClient = setup([note({ id: "a", content: "" })]);
     mocks.getAllNoteContentsAction.mockResolvedValue([{ id: "a", content: "from the server" }]);
 
-    await warmAllNotes(queryClient);
+    await warmAllNotes(queryClient, OWNER);
 
     const notes = queryClient.getQueryData<NoteRecord[]>(notesQueryKey)!;
     expect(notes[0].content).toBe("");
@@ -89,7 +104,7 @@ describe("warmAllNotes", () => {
       { id: "deleted-meanwhile", content: "should be ignored" },
     ]);
 
-    await warmAllNotes(queryClient);
+    await warmAllNotes(queryClient, OWNER);
 
     const notes = queryClient.getQueryData<NoteRecord[]>(notesQueryKey)!;
     expect(notes).toHaveLength(1);
@@ -103,7 +118,7 @@ describe("warmAllNotes", () => {
       { id: "b", content: "from server" },
     ]);
 
-    await warmAllNotes(queryClient, (id) => id === "a");
+    await warmAllNotes(queryClient, OWNER, (id) => id === "a");
 
     const notes = queryClient.getQueryData<NoteRecord[]>(notesQueryKey)!;
     expect(notes.find((n) => n.id === "a")?.content).toBeUndefined();
@@ -119,7 +134,7 @@ describe("warmAllNotes", () => {
       }),
     );
 
-    const warming = warmAllNotes(queryClient);
+    const warming = warmAllNotes(queryClient, OWNER);
     // The note warms through some other path (e.g. the user opened it and a
     // save landed) while this batch is still in flight.
     queryClient.setQueryData<NoteRecord[]>(notesQueryKey, (old) =>
@@ -141,7 +156,7 @@ describe("warmAllNotes", () => {
       }),
     );
 
-    const warming = warmAllNotes(queryClient);
+    const warming = warmAllNotes(queryClient, OWNER);
     queryClient.setQueryData<NoteRecord[]>(notesQueryKey, (old) =>
       old?.map((n) => (n.id === "a" ? { ...n, updatedAt: "2026-01-02T00:00:00.000Z" } : n)),
     );
@@ -156,9 +171,85 @@ describe("warmAllNotes", () => {
     const queryClient = setup([note({ id: "a" })]);
     mocks.getAllNoteContentsAction.mockRejectedValue(new Error("network error"));
 
-    await expect(warmAllNotes(queryClient)).resolves.toBeUndefined();
+    await expect(warmAllNotes(queryClient, OWNER)).resolves.toBeUndefined();
     const notes = queryClient.getQueryData<NoteRecord[]>(notesQueryKey)!;
     expect(notes[0].content).toBeUndefined();
+  });
+
+  it("mirrors newly-warmed content into the Local store tagged with the current account", async () => {
+    const queryClient = setup([note({ id: "a" })]);
+    mocks.getAllNoteContentsAction.mockResolvedValue([{ id: "a", content: "hello" }]);
+
+    await warmAllNotes(queryClient, OWNER);
+
+    expect(mocks.setLocalNote).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "a", content: "hello", ownerId: OWNER, syncedAt: "2026-01-01T00:00:00.000Z" }),
+    );
+  });
+
+  it("regression (unsynced-local-never-clobbered): skips the Local store mirror when the existing local record has genuine unpushed edits", async () => {
+    const queryClient = setup([note({ id: "a" })]);
+    mocks.getAllNoteContentsAction.mockResolvedValue([{ id: "a", content: "older server content" }]);
+    mocks.getLocalNote.mockResolvedValue({
+      id: "a",
+      title: "local title",
+      content: "newer local content",
+      pinned: false,
+      archived: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      editedAt: "2026-01-05T00:00:00.000Z",
+      syncedAt: "2026-01-01T00:00:00.000Z", // older than editedAt -- genuinely unsynced
+      deleted: false,
+      ownerId: OWNER,
+    });
+
+    await warmAllNotes(queryClient, OWNER);
+
+    expect(mocks.setLocalNote).not.toHaveBeenCalled();
+  });
+
+  it("regression (unsynced-local-never-clobbered): skips the mirror when the local record was never synced at all", async () => {
+    const queryClient = setup([note({ id: "a" })]);
+    mocks.getAllNoteContentsAction.mockResolvedValue([{ id: "a", content: "older server content" }]);
+    mocks.getLocalNote.mockResolvedValue({
+      id: "a",
+      title: "local title",
+      content: "local content",
+      pinned: false,
+      archived: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      editedAt: "2026-01-01T00:00:00.000Z",
+      syncedAt: null,
+      deleted: false,
+      ownerId: OWNER,
+    });
+
+    await warmAllNotes(queryClient, OWNER);
+
+    expect(mocks.setLocalNote).not.toHaveBeenCalled();
+  });
+
+  it("still mirrors when the existing local record is already fully synced", async () => {
+    const queryClient = setup([note({ id: "a" })]);
+    mocks.getAllNoteContentsAction.mockResolvedValue([{ id: "a", content: "server content" }]);
+    mocks.getLocalNote.mockResolvedValue({
+      id: "a",
+      title: "old title",
+      content: "old content",
+      pinned: false,
+      archived: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      editedAt: "2026-01-01T00:00:00.000Z",
+      syncedAt: "2026-01-01T00:00:00.000Z", // editedAt <= syncedAt -- no pending changes
+      deleted: false,
+      ownerId: OWNER,
+    });
+
+    await warmAllNotes(queryClient, OWNER);
+
+    expect(mocks.setLocalNote).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "a", content: "server content" }),
+    );
   });
 });
 
@@ -241,17 +332,22 @@ describe("useLocalNotesQuery", () => {
   });
 });
 
-function localNote(id: string, syncedAt: string | null) {
+function localNote(
+  id: string,
+  syncedAt: string | null,
+  overrides: { ownerId?: string | null; pinned?: boolean; archived?: boolean } = {},
+) {
   return {
     id,
     title: "untitled",
     content: "hi",
-    pinned: false,
-    archived: false,
+    pinned: overrides.pinned ?? false,
+    archived: overrides.archived ?? false,
     createdAt: "2026-01-01T00:00:00.000Z",
     editedAt: "2026-01-01T00:00:00.000Z",
     syncedAt,
     deleted: false,
+    ownerId: overrides.ownerId ?? null,
   };
 }
 
@@ -259,20 +355,22 @@ describe("useMigrateLocalNotes", () => {
   beforeEach(() => {
     mocks.listNotes.mockReset();
     mocks.saveNoteContentAction.mockReset();
+    mocks.setNoteFlagsAction.mockReset().mockResolvedValue(undefined);
     mocks.markLocalSynced.mockReset();
+    mocks.setLocalNote.mockReset().mockResolvedValue(undefined);
   });
 
-  it("reports progress as each unsynced local note is pushed, and leaves synced ones alone", async () => {
+  it("reports progress as each migratable local note is pushed, and leaves a different account's note alone", async () => {
     mocks.listNotes.mockResolvedValue([
-      localNote("a", null),
-      localNote("b", "2026-01-01T00:00:00.000Z"), // already synced -- not migrated
+      localNote("a", null), // anonymous-origin -- migratable
+      localNote("b", "2026-01-01T00:00:00.000Z", { ownerId: "someone-else" }), // a different account's already-synced note -- never migrated
       localNote("c", null),
     ]);
     mocks.saveNoteContentAction.mockImplementation(({ noteId }: { noteId: string }) =>
       Promise.resolve({ title: "untitled", updatedAt: `${noteId}-synced` }),
     );
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { result } = renderHook(() => useMigrateLocalNotes("user@example.com"), {
+    const { result } = renderHook(() => useMigrateLocalNotes("user@example.com", OWNER), {
       wrapper: wrapper(queryClient),
     });
 
@@ -283,10 +381,62 @@ describe("useMigrateLocalNotes", () => {
     );
   });
 
-  it("stays at {total: 0, current: 0} when nothing needs migrating", async () => {
-    mocks.listNotes.mockResolvedValue([localNote("a", "2026-01-01T00:00:00.000Z")]);
+  it("resumes this same account's own previously-stranded unsynced note", async () => {
+    mocks.listNotes.mockResolvedValue([localNote("stranded", null, { ownerId: OWNER })]);
+    mocks.saveNoteContentAction.mockResolvedValue({ title: "untitled", updatedAt: "now" });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { result } = renderHook(() => useMigrateLocalNotes("user@example.com"), {
+    const { result } = renderHook(() => useMigrateLocalNotes("user@example.com", OWNER), {
+      wrapper: wrapper(queryClient),
+    });
+
+    await waitFor(() => expect(result.current).toEqual({ total: 1, current: 1 }));
+    expect(mocks.saveNoteContentAction).toHaveBeenCalledWith({ noteId: "stranded", content: "hi" });
+  });
+
+  it("tags a migrated note as owned by this account, so it can't be re-adopted by a different account later", async () => {
+    mocks.listNotes.mockResolvedValue([localNote("a", null)]);
+    mocks.saveNoteContentAction.mockResolvedValue({ title: "untitled", updatedAt: "2026-02-01T00:00:00.000Z" });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderHook(() => useMigrateLocalNotes("user@example.com", OWNER), { wrapper: wrapper(queryClient) });
+
+    await waitFor(() =>
+      expect(mocks.setLocalNote).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "a", ownerId: OWNER, syncedAt: "2026-02-01T00:00:00.000Z" }),
+      ),
+    );
+  });
+
+  it("carries pinned/archived along via a follow-up setNoteFlagsAction, not just content", async () => {
+    mocks.listNotes.mockResolvedValue([localNote("a", null, { pinned: true, archived: false })]);
+    mocks.saveNoteContentAction.mockResolvedValue({ title: "untitled", updatedAt: "now" });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderHook(() => useMigrateLocalNotes("user@example.com", OWNER), { wrapper: wrapper(queryClient) });
+
+    await waitFor(() =>
+      expect(mocks.setNoteFlagsAction).toHaveBeenCalledWith({
+        noteId: "a",
+        pinned: true,
+        archived: false,
+      }),
+    );
+  });
+
+  it("skips the flags call entirely when neither is set -- nothing to carry", async () => {
+    mocks.listNotes.mockResolvedValue([localNote("a", null)]);
+    mocks.saveNoteContentAction.mockResolvedValue({ title: "untitled", updatedAt: "now" });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useMigrateLocalNotes("user@example.com", OWNER), {
+      wrapper: wrapper(queryClient),
+    });
+
+    await waitFor(() => expect(result.current).toEqual({ total: 1, current: 1 }));
+    expect(mocks.setNoteFlagsAction).not.toHaveBeenCalled();
+  });
+
+  it("stays at {total: 0, current: 0} when nothing needs migrating", async () => {
+    mocks.listNotes.mockResolvedValue([localNote("a", "2026-01-01T00:00:00.000Z", { ownerId: OWNER })]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useMigrateLocalNotes("user@example.com", OWNER), {
       wrapper: wrapper(queryClient),
     });
 
@@ -298,7 +448,7 @@ describe("useMigrateLocalNotes", () => {
   it("does nothing for an anonymous session", async () => {
     mocks.listNotes.mockResolvedValue([localNote("a", null)]);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    renderHook(() => useMigrateLocalNotes(null), { wrapper: wrapper(queryClient) });
+    renderHook(() => useMigrateLocalNotes(null, null), { wrapper: wrapper(queryClient) });
 
     await new Promise((r) => setTimeout(r, 10));
     expect(mocks.listNotes).not.toHaveBeenCalled();
