@@ -8,6 +8,8 @@ import {
   purgeNote,
   markSynced,
   getOrCreateDeviceId,
+  setThemeMeta,
+  getThemeMeta,
   type LocalNote,
 } from "@/lib/local-notes-store";
 
@@ -93,5 +95,13 @@ describe("local-notes-store", () => {
 
     await setNote(note({ id: "a" }));
     expect((await listNotes()).map((n) => n.id)).toEqual(["a"]);
+  });
+
+  it("getThemeMeta returns undefined until setThemeMeta has been called", async () => {
+    expect(await getThemeMeta()).toBeUndefined();
+    await setThemeMeta("dark");
+    expect(await getThemeMeta()).toBe("dark");
+    await setThemeMeta("light");
+    expect(await getThemeMeta()).toBe("light");
   });
 });

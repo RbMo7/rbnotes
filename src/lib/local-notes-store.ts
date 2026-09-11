@@ -134,3 +134,22 @@ export async function getOrCreateDeviceId(): Promise<string> {
   await safeSet(DEVICE_ID_KEY, id, metaStore);
   return id;
 }
+
+const THEME_KEY = "theme";
+
+/**
+ * A redundant IndexedDB mirror of the active theme, alongside
+ * localStorage's copy (local-settings.ts, which stays the synchronous
+ * read path SettingsHydrator's lazy initializer needs -- IndexedDB reads
+ * are always async and can't serve that). Pure backup: private browsing
+ * or a cleared localStorage can lose the theme choice while IndexedDB
+ * survives, or vice versa, so writing to both costs little and covers
+ * more failure modes than either alone.
+ */
+export async function setThemeMeta(theme: string): Promise<void> {
+  await safeSet(THEME_KEY, theme, metaStore);
+}
+
+export async function getThemeMeta(): Promise<string | undefined> {
+  return safeGet<string>(THEME_KEY, metaStore);
+}
