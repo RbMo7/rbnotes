@@ -8,6 +8,7 @@ import { useWorkspaceStore } from "@/lib/store";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { SidebarLists } from "@/components/shell/sidebar/SidebarLists";
+import { LocalOnlyBadge } from "@/components/shell/LocalOnlyBadge";
 
 /**
  * Below the mobile breakpoint (the same `useIsDesktop()` seam everything
@@ -20,6 +21,7 @@ export function Sidebar() {
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);
   const mobileOpen = useWorkspaceStore((s) => s.mobileSidebarOpen);
   const setMobileOpen = useWorkspaceStore((s) => s.setMobileSidebarOpen);
+  const syncEnabled = useWorkspaceStore((s) => s.syncEnabled);
   const pathname = usePathname();
   const { createAndOpenNote } = useWorkspace();
   const isDesktop = useIsDesktop();
@@ -73,15 +75,19 @@ export function Sidebar() {
       <SidebarLists />
 
       <div className="h-12 px-space-4 border-t border-outline-variant/30 flex items-center shrink-0 bg-surface-container-low">
-        <Link
-          href="/settings"
-          data-active={pathname === "/settings"}
-          className="flex items-center gap-space-2 text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-colors data-[active=true]:text-on-surface"
-        >
-          <Settings size={16} strokeWidth={1.5} />
-          <span>Settings</span>
-          <span className="font-label-sm text-label-sm text-outline">[:set]</span>
-        </Link>
+        {syncEnabled ? (
+          <Link
+            href="/settings"
+            data-active={pathname === "/settings"}
+            className="flex items-center gap-space-2 text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-colors data-[active=true]:text-on-surface"
+          >
+            <Settings size={16} strokeWidth={1.5} />
+            <span>Settings</span>
+            <span className="font-label-sm text-label-sm text-outline">[:set]</span>
+          </Link>
+        ) : (
+          <LocalOnlyBadge />
+        )}
       </div>
       </aside>
     </>

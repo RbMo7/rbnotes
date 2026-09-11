@@ -5,7 +5,7 @@ import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-quer
 import { getAllNotesMetaAction, getAllNoteContentsAction } from "@/server/actions/notes";
 import { notesQueryKey, type NoteRecord } from "@/lib/note-types";
 import { useWorkspaceStore } from "@/lib/store";
-import { listNotes } from "@/lib/local-notes-store";
+import { listNotes, setNote as setLocalNote } from "@/lib/local-notes-store";
 
 export type { NoteRecord };
 
@@ -169,6 +169,14 @@ export function useNotesMutations() {
  * genuinely does not exist server-side yet; it's created on the first save
  * via an upsert (see lib/notes.ts's upsertNoteContent), exactly like an
  * unnamed buffer in real Vim never touches disk until saved.
+ *
+ * Also written straight into the Local store (Seam 1) at creation, not
+ * just on first edit: without this, a brand-new note exists only in the
+ * TanStack cache until the user types something, and useLocalNotesQuery's
+ * mount-time read (which unconditionally reseeds the cache from the Local
+ * store for a Local-only session) would race it and wipe it straight back
+ * out of the cache. A note has to exist in the Local store from birth for
+ * the same reason a client-generated id does.
  */
 export function useCreateNote() {
   const { addNote } = useNotesMutations();
@@ -185,6 +193,17 @@ export function useCreateNote() {
       updatedAt: now,
     };
     addNote(note);
+    void setLocalNote({
+      id: note.id,
+      title: note.title,
+      content: note.content ?? "",
+      pinned: note.pinned,
+      archived: note.archived,
+      createdAt: note.createdAt,
+      editedAt: now,
+      syncedAt: null,
+      deleted: false,
+    });
     return note.id;
   }, [addNote]);
 }
