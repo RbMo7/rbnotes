@@ -104,6 +104,25 @@ export function findLinkAt(links: LinkHit[], pos: number): LinkHit | undefined {
   return links.find((l) => l.from <= pos && pos <= l.to);
 }
 
+const SAFE_LINK_SCHEMES = new Set(["http:", "https:", "mailto:"]);
+
+/**
+ * A note's link destination is untrusted content -- it can come from a
+ * shared note written by someone else, not just the current user. Without
+ * this, opening a `[click](javascript:...)` (or `data:`/`vbscript:`/
+ * `blob:`/`file:`/any other scripting-capable scheme) link would run
+ * arbitrary script in the viewer's tab at this app's origin. Only
+ * http/https/mailto are allowed; everything else, including anything that
+ * fails to parse as a URL at all, is rejected.
+ */
+export function isSafeLinkScheme(url: string): boolean {
+  try {
+    return SAFE_LINK_SCHEMES.has(new URL(url).protocol.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 function build(state: EditorState, mode: VimMode): PreviewState {
   if (RAW_MODES.has(mode)) return { mode, deco: Decoration.none, links: [] };
 
@@ -256,7 +275,7 @@ function linkClickHandler(field: StateField<PreviewState>): Extension {
       const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
       if (pos == null) return false;
       const hit = findLinkAt(view.state.field(field).links, pos);
-      if (!hit) return false;
+      if (!hit || !isSafeLinkScheme(hit.url)) return false;
       event.preventDefault();
       window.open(hit.url, "_blank", "noopener,noreferrer");
       return true;
