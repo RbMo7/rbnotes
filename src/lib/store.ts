@@ -99,6 +99,16 @@ type WorkspaceState = {
   settings: Settings;
   setSettings: (settings: Settings) => void;
   updateSettings: (patch: Partial<Settings>) => void;
+
+  // Whether this session is Synced (CONTEXT.md) -- signed in -- vs.
+  // Local-only (anonymous). Seeded once from the server (SettingsHydrator,
+  // alongside settings) so notes-query.ts and useAutosave can read it
+  // without prop-drilling `email` through every consumer of the shared
+  // notes cache. Defaults true so anything that reads it before the
+  // hydrator runs (or in a test that never sets it) keeps today's
+  // always-signed-in behavior rather than silently going Local-only.
+  syncEnabled: boolean;
+  setSyncEnabled: (syncEnabled: boolean) => void;
 };
 
 /**
@@ -173,6 +183,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   settings: defaultSettings,
   setSettings: (settings) => set({ settings }),
   updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+
+  syncEnabled: true,
+  setSyncEnabled: (syncEnabled) => set({ syncEnabled }),
 }));
 
 /**

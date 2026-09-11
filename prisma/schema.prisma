@@ -62,6 +62,17 @@ model NoteShare {
   @@map("note_shares")
 }
 
+// A Device (CONTEXT.md) is an anonymous, local-only browser install -- this
+// row only counts free-tier usage (first/last seen); it carries no note
+// content and is never linked to a Profile unless that browser signs in.
+model AnonymousDevice {
+  id          String   @id
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+
+  @@map("anonymous_devices")
+}
+
 model NoteShareView {
   id            String   @id @default(uuid()) @db.Uuid
   shareId       String   @db.Uuid

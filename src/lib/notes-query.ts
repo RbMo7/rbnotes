@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { getAllNotesMetaAction, getAllNoteContentsAction } from "@/server/actions/notes";
 import { notesQueryKey, type NoteRecord } from "@/lib/note-types";
+import { useWorkspaceStore } from "@/lib/store";
+import { listNotes } from "@/lib/local-notes-store";
 
 export type { NoteRecord };
 
@@ -24,11 +26,56 @@ export type { NoteRecord };
  * real Date (grouping, timestamp formatting) convert at the point of use.
  */
 
+/**
+ * `enabled: syncEnabled` (CONTEXT.md's Synced vs. Local-only, seeded by
+ * SettingsHydrator) is load-bearing, not an optimization: every action in
+ * server/actions/notes.ts calls getAuthedUser(), which redirects to
+ * /login when there's no session. A Local-only (anonymous) session must
+ * never let this queryFn run at all -- see useLocalNotesQuery below for
+ * how such a session's notes reach this same cache instead.
+ */
 export function useNotesQuery() {
+  const syncEnabled = useWorkspaceStore((s) => s.syncEnabled);
   return useQuery<NoteRecord[]>({
     queryKey: notesQueryKey,
     queryFn: getAllNotesMetaAction,
+    enabled: syncEnabled,
   });
+}
+
+/**
+ * The Local-only counterpart to the server prefetch in (app)/layout.tsx:
+ * seeds the shared notes cache from the Local store instead, once, for an
+ * anonymous session. Mounted once (WorkspaceProvider), not per-consumer --
+ * every useNotesQuery() call site reads the same cache key. A no-op
+ * whenever `enabled` is false (Synced sessions get their data from the
+ * server prefetch instead).
+ */
+export function useLocalNotesQuery(enabled: boolean) {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    void (async () => {
+      const local = await listNotes();
+      if (cancelled) return;
+      queryClient.setQueryData<NoteRecord[]>(
+        notesQueryKey,
+        local.map((n) => ({
+          id: n.id,
+          title: n.title,
+          content: n.content,
+          pinned: n.pinned,
+          archived: n.archived,
+          createdAt: n.createdAt,
+          updatedAt: n.editedAt,
+        })),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, queryClient]);
 }
 
 /** True once every note in the cache has its content warmed -- the boundary hybrid search resolves on. */
