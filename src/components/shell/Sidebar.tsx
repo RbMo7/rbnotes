@@ -82,6 +82,15 @@ const THEME_LABEL: Record<SettingsShape["theme"], string> = {
  * -> Hacker on each click, no Settings-page trip required. Styled as a
  * bracket-command chip (`[theme]`), the same terminal-voice language as
  * `[:set]`/`[^N]` elsewhere in this shell, not a color-swatch picker.
+ *
+ * Icon-only (a small accent-colored dot, not the theme's full name) so it
+ * doesn't crowd this row at the sidebar's minimum resized width -- the
+ * name is still available via the tooltip/aria-label, not lost, just not
+ * spending horizontal space by default. `data-theme={theme}` on the dot
+ * itself (same live-preview mechanism SettingsView's swatches use) is
+ * redundant most of the time -- it's already the ambient theme -- but
+ * keeps the dot correct even in the one-tick window before
+ * SettingsHydrator's effect applies the real theme to <html>.
  */
 function ThemeToggle() {
   const settings = useWorkspaceStore((s) => s.settings);
@@ -98,11 +107,12 @@ function ThemeToggle() {
   return (
     <button
       onClick={cycle}
-      title="Cycle theme"
+      title={`Theme: ${THEME_LABEL[theme]} (click to cycle)`}
+      aria-label={`Theme: ${THEME_LABEL[theme]}. Click to cycle.`}
       className="flex items-center gap-space-1 font-label-sm text-label-sm text-outline hover:text-on-surface transition-colors shrink-0"
     >
       <span className="text-primary">[theme]</span>
-      <span>{THEME_LABEL[theme]}</span>
+      <span data-theme={theme} className="w-2.5 h-2.5 rounded-full bg-primary shrink-0" />
     </button>
   );
 }
@@ -189,13 +199,19 @@ export function Sidebar() {
         <ThemeToggle />
       </div>
 
+      {/* Hit target is wider (w-3, centered on the true edge via -right-1)
+          than what's actually painted (the nested w-px/hover:w-0.5 bar) --
+          a 1px-wide draggable strip was near-impossible to grab precisely.
+          The visible line stays thin; only the invisible grab zone grew. */}
       <div
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize sidebar"
         onPointerDown={onResizeStart}
-        className="hidden lg:block absolute top-0 right-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors"
-      />
+        className="hidden lg:flex items-stretch justify-center absolute top-0 -right-1 bottom-0 w-3 cursor-col-resize group"
+      >
+        <div className="w-px group-hover:w-0.5 bg-transparent group-hover:bg-primary/50 group-active:bg-primary transition-colors" />
+      </div>
       </aside>
     </>
   );
