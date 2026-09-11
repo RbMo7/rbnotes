@@ -31,6 +31,7 @@ import { displayFilename, formatWordCount, shortHash } from "@/lib/format";
 import { useNotesQuery, useNotesMutations } from "@/lib/notes-query";
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
 import { saveSettingsAction } from "@/server/actions/settings";
+import { saveLocalSettings } from "@/lib/local-settings";
 import type { Settings } from "@/lib/schemas";
 
 /**
@@ -223,9 +224,14 @@ export function WorkspaceBuffer() {
   const updateSettings = useCallback(
     (patch: Partial<Settings>) => {
       setSettingsStore(patch);
-      startTransition(() => {
-        saveSettingsAction({ ...settings, ...patch }).catch(() => {});
-      });
+      const next = { ...settings, ...patch };
+      if (useWorkspaceStore.getState().syncEnabled) {
+        startTransition(() => {
+          saveSettingsAction(next).catch(() => {});
+        });
+      } else {
+        saveLocalSettings(next);
+      }
     },
     [settings, setSettingsStore],
   );

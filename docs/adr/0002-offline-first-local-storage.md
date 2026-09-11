@@ -11,6 +11,10 @@ This also settles the free/paid boundary: an anonymous session is fully-featured
 - **Require an account to use the app at all.** Rejected — login becomes optional; presence of a session is what flips a browser into synced mode. Frictionless free tier (open the app, start typing, no signup) outweighs the simplicity of one universal auth gate.
 - **Anonymous usage counted via full accounts only.** Rejected — a lightweight per-device ping (random local ID, first/last seen, no note content) counts free-tier usage without requiring sign-in, keeping the free tier genuinely frictionless.
 
+## Amendment (settings is a free-tier feature, not account-gated)
+
+`/settings` was originally listed as staying hard-gated behind an account, on the reasoning that "there's nothing to configure without one." That was wrong: line numbers, tab size, word wrap, and autosave are editor preferences, not account data, and a Local-only session has every reason to want them. `/settings` is no longer in the edge guard's protected list, `SettingsPage` uses `getOptionalUser()`, and a Local-only session's preferences persist to `localStorage` (`src/lib/local-settings.ts`) instead of the account's Profile row -- the same Synced-vs-Local-only branch `useAutosave` already takes for note content, applied to settings too. Only the Account section (email display, sign-out) stays conditional on actually having a session.
+
 ## Consequences
 
 - `(app)/layout.tsx` moves from `getAuthedUser()` (hard redirect to `/login`) to the already-existing `getOptionalUser()`. Session presence alone determines Local-only vs Synced — actual billing/plan enforcement is a separate, later decision.

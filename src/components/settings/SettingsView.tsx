@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { saveSettingsAction } from "@/server/actions/settings";
-import { signOutAction } from "@/server/actions/auth";
+import { saveLocalSettings } from "@/lib/local-settings";
+import { useSignOut } from "@/lib/use-sign-out";
 import { useWorkspaceStore } from "@/lib/store";
 import type { Settings } from "@/lib/schemas";
 
@@ -30,21 +32,31 @@ function SettingRow({
   );
 }
 
-export function SettingsView({ email }: { email: string }) {
+export function SettingsView({ email }: { email: string | null }) {
   // Shared with every open note editor (WorkspaceBuffer) -- changing a
   // setting here is reflected there immediately, and vice versa, since
   // both read the exact same store instead of independently-fetched
   // copies of the same data.
   const settings = useWorkspaceStore((s) => s.settings);
+  const syncEnabled = useWorkspaceStore((s) => s.syncEnabled);
   const updateStore = useWorkspaceStore((s) => s.updateSettings);
   const [saved, setSaved] = useState(true);
   const [, startTransition] = useTransition();
+  const signOut = useSignOut();
 
+  // Editor preferences are a free-tier feature (ADR 0002) -- a Local-only
+  // session persists them to localStorage instead of the server, same
+  // branch WorkspaceBuffer's :set command takes.
   const update = (patch: Partial<Settings>) => {
     updateStore(patch);
+    const next = { ...settings, ...patch };
+    if (!syncEnabled) {
+      saveLocalSettings(next);
+      return;
+    }
     setSaved(false);
     startTransition(async () => {
-      await saveSettingsAction({ ...settings, ...patch });
+      await saveSettingsAction(next);
       setSaved(true);
     });
   };
@@ -101,24 +113,38 @@ export function SettingsView({ email }: { email: string }) {
         </SettingRow>
       </section>
 
-      <section className="bg-surface-container-high">
-        <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">
-          Account
-        </div>
-        <SettingRow label="identity (email)">
-          <span className="font-code-editor text-code-editor text-on-surface-variant">{email}</span>
-        </SettingRow>
-        <div className="px-space-4 py-space-3">
-          <form action={signOutAction}>
+      {email ? (
+        <section className="bg-surface-container-high">
+          <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">
+            Account
+          </div>
+          <SettingRow label="identity (email)">
+            <span className="font-code-editor text-code-editor text-on-surface-variant">{email}</span>
+          </SettingRow>
+          <div className="px-space-4 py-space-3">
             <button
-              type="submit"
+              onClick={signOut}
               className="px-space-3 py-space-2 bg-surface-container text-error border border-outline-variant hover:border-error font-label-md text-label-md transition-colors"
             >
               Sign out [:q!]
             </button>
-          </form>
-        </div>
-      </section>
+          </div>
+        </section>
+      ) : (
+        <section className="bg-surface-container-high">
+          <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">
+            Account
+          </div>
+          <div className="px-space-4 py-space-3 flex items-center justify-between gap-space-4">
+            <span className="font-label-sm text-label-sm text-on-surface-variant">
+              Local only -- these preferences stay in this browser.
+            </span>
+            <Link href="/login" className="text-primary hover:underline font-label-md text-label-md">
+              Sign in to sync
+            </Link>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

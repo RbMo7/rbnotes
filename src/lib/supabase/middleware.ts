@@ -2,12 +2,13 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
 
-// "/" (the Dashboard) and "/notes" are deliberately absent -- an anonymous
-// session gets a fully-featured Local-only workspace there (ADR 0002),
-// never bounced to /login. Only truly account-required surfaces stay
-// protected: /settings (nothing to configure without an account) and /s/
-// (Supabase-authenticated share-link viewing).
-const PROTECTED_PREFIXES = ["/settings", "/s/"];
+// "/", "/notes", and "/settings" are deliberately absent -- an anonymous
+// session gets a fully-featured Local-only workspace (ADR 0002), settings
+// included: editor preferences (line numbers, tab size, word wrap...) are
+// genuine free-tier features, not account data, and persist to
+// localStorage instead of the server for a Local-only session. Only /s/
+// (Supabase-authenticated share-link viewing) stays protected.
+const PROTECTED_PREFIXES = ["/s/"];
 // /reset is deliberately excluded: it's reached via Supabase's password
 // recovery link, which signs the user in with a temporary session before
 // redirecting here. Treating it as an "auth page" would bounce that
