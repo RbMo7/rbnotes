@@ -94,13 +94,22 @@ function addLineClass(
   }
 }
 
-type PreviewState = { mode: VimMode; deco: DecorationSet };
+/** A clickable link's document range and destination, found during build(). */
+export type LinkHit = { from: number; to: number; url: string };
+
+type PreviewState = { mode: VimMode; deco: DecorationSet; links: LinkHit[] };
+
+/** Given the links found in the current build and a document position, the link (if any) covering it. Pure, so it's testable without a live EditorView. */
+export function findLinkAt(links: LinkHit[], pos: number): LinkHit | undefined {
+  return links.find((l) => l.from <= pos && pos <= l.to);
+}
 
 function build(state: EditorState, mode: VimMode): PreviewState {
-  if (RAW_MODES.has(mode)) return { mode, deco: Decoration.none };
+  if (RAW_MODES.has(mode)) return { mode, deco: Decoration.none, links: [] };
 
   const doc = state.doc;
   const ranges: Range<Decoration>[] = [];
+  const links: LinkHit[] = [];
 
   syntaxTree(state).iterate({
     enter(node) {
@@ -129,6 +138,22 @@ function build(state: EditorState, mode: VimMode): PreviewState {
         case "LinkMark":
           ranges.push(Decoration.replace({}).range(node.from, node.to));
           return;
+        case "Link": {
+          // Only real [text](url) links, not Image -- a plain bare return
+          // (not `false`) so the walk still descends into this node's
+          // LinkMark/URL children, which the cases above still hide.
+          const urlNode = node.node.getChild("URL");
+          if (!urlNode) return;
+          const url = doc.sliceString(urlNode.from, urlNode.to);
+          links.push({ from: node.from, to: node.to, url });
+          ranges.push(
+            Decoration.mark({ class: "cm-lp-link", attributes: { title: url } }).range(
+              node.from,
+              node.to,
+            ),
+          );
+          return;
+        }
         case "URL": {
           // An autolink's URL *is* its visible text (`<https://x.com>` has
           // no separate label) -- hiding it would leave nothing visible at
@@ -159,7 +184,7 @@ function build(state: EditorState, mode: VimMode): PreviewState {
     },
   });
 
-  return { mode, deco: Decoration.set(ranges, true) };
+  return { mode, deco: Decoration.set(ranges, true), links };
 }
 
 /**
@@ -209,7 +234,35 @@ const livePreviewBaseTheme = EditorView.baseTheme({
   ".cm-lp-code": {
     backgroundColor: "var(--color-surface-container-high)",
   },
+  ".cm-lp-link": {
+    color: "var(--color-primary)",
+    textDecoration: "underline",
+    cursor: "pointer",
+  },
 });
+
+/**
+ * Click-to-open for a live-preview link (case "Link" in build() above).
+ * mousedown, not click: CodeMirror places the cursor on mousedown, so
+ * intercepting there and returning true is what stops it from also moving
+ * the cursor into the (now-hidden) link syntax. Plain left-click, no
+ * modifier -- the link's own hover title (see the "Link" case) is the
+ * only affordance needed to know it's clickable.
+ */
+function linkClickHandler(field: StateField<PreviewState>): Extension {
+  return EditorView.domEventHandlers({
+    mousedown(event, view) {
+      if (event.button !== 0) return false;
+      const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+      if (pos == null) return false;
+      const hit = findLinkAt(view.state.field(field).links, pos);
+      if (!hit) return false;
+      event.preventDefault();
+      window.open(hit.url, "_blank", "noopener,noreferrer");
+      return true;
+    },
+  });
+}
 
 export function livePreview(modeRef: ModeRef): Extension {
   const field = StateField.define<PreviewState>({
@@ -234,5 +287,5 @@ export function livePreview(modeRef: ModeRef): Extension {
     ],
   });
 
-  return [field, snapCursorOut(field), livePreviewBaseTheme];
+  return [field, snapCursorOut(field), linkClickHandler(field), livePreviewBaseTheme];
 }
