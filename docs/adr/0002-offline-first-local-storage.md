@@ -15,6 +15,16 @@ This also settles the free/paid boundary: an anonymous session is fully-featured
 
 `/settings` was originally listed as staying hard-gated behind an account, on the reasoning that "there's nothing to configure without one." That was wrong: line numbers, tab size, word wrap, and autosave are editor preferences, not account data, and a Local-only session has every reason to want them. `/settings` is no longer in the edge guard's protected list, `SettingsPage` uses `getOptionalUser()`, and a Local-only session's preferences persist to `localStorage` (`src/lib/local-settings.ts`) instead of the account's Profile row -- the same Synced-vs-Local-only branch `useAutosave` already takes for note content, applied to settings too. Only the Account section (email display, sign-out) stays conditional on actually having a session.
 
+## Amendment (a local note needs an Owner, not just a Synced mark)
+
+A cloud code review found a real cross-account leak: `useMigrateLocalNotes` decided what to adopt into a newly-signed-in account by checking `syncedAt === null` alone, and `purgeSyncedNotes` decided what to delete on sign-out the same way. That conflates two different questions -- "has this reached the server yet" and "whose is this" -- which are NOT the same thing. A note created while signed in as Alice, that just hasn't reached the server before she signs out, is unsynced but still hers. Treating "unsynced" as "anonymous-origin" meant that note could get silently adopted by Bob, if he signs in on the same device afterward.
+
+`LocalNote` now carries an `ownerId: string | null` (CONTEXT.md's Owner) alongside `syncedAt`. Migration eligibility (`isMigratable`) and sign-out purge eligibility (`isPurgeable`) both check ownership first, `syncedAt` second:
+- **Migration** only ever adopts a note with `ownerId === null` (genuinely anonymous) or `ownerId === <the signing-in account>` (that account resuming its own previously-stranded unsynced note on this device) -- never a different account's note, regardless of sync state.
+- **Purge** only ever removes a note owned by the signing-out account AND already confirmed synced. A same-account note that's still unsynced is left alone rather than destroyed -- inert on the device, invisible to any other account, recoverable the next time its actual owner signs in here.
+
+Every local write path (note creation, autosave's local mirror, the server-content warm-up mirror) now tags `ownerId` from the current session. Sign-out also makes one best-effort, time-boxed attempt to flush any pending dirty note before purging, so the common case (online, just mid-debounce) doesn't need a second device visit to resolve -- the Owner tag is what makes it safe either way, whether that flush succeeds or not.
+
 ## Consequences
 
 - `(app)/layout.tsx` moves from `getAuthedUser()` (hard redirect to `/login`) to the already-existing `getOptionalUser()`. Session presence alone determines Local-only vs Synced — actual billing/plan enforcement is a separate, later decision.

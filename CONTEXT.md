@@ -69,6 +69,10 @@ _Avoid_: updated timestamp
 **Tombstone**:
 A note marked deleted locally but not yet purged. Deletes travel through the same push as any other edit — a note can never vanish locally before the server has had the chance to see it deleted too.
 
+**Owner**:
+The account (or `null`, for genuinely Local-only) that created or last owns a note's local copy. Distinct from Synced/unsynced: an unsynced note created while signed in still has an Owner — it just hasn't reached the server yet. Deciding who a local note may sync into, or be cleared from, by *Synced-vs-unsynced* alone conflates two different questions and was a real cross-account leak; Owner is what actually answers "whose is this."
+_Avoid_: userId (when talking about a local note's origin — say Owner instead)
+
 **Device**:
 An anonymous, local-only browser install — never a person. Only tracked to count free-tier usage (first seen / last seen); carries no note content and no identity until the browser signs in.
 _Avoid_: anonymous user, visitor
