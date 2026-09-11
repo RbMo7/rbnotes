@@ -50,7 +50,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="bg-surface font-body-md text-body-md text-on-surface select-none antialiased min-h-screen">
       <QueryProvider>
         <HydrationBoundary state={dehydrate(queryClient)}>
-          <SettingsHydrator settings={settings} syncEnabled={!!user} />
+          <SettingsHydrator settings={settings} syncEnabled={!!user} userId={user?.id ?? null} />
           <WorkspaceProvider email={user?.email ?? null}>{children}</WorkspaceProvider>
         </HydrationBoundary>
       </QueryProvider>

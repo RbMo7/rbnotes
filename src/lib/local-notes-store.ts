@@ -14,6 +14,17 @@ import { createStore, get, set, del, values } from "idb-keyval";
  * instead, so the delete itself has something to sync. `purgeNote` is the
  * separate, later step that actually removes the record, called only once
  * a delete is known to be safe to forget (see local-sync.ts).
+ *
+ * `ownerId` is the account (its id) that created or last owns this record,
+ * or `null` for a genuinely Local-only note (CONTEXT.md) with no account
+ * involved at all. It exists to answer a question `syncedAt` alone can't:
+ * "unsynced" and "anonymous-origin" are NOT the same thing -- a note
+ * created while signed in, that just hasn't reached the server yet, is
+ * unsynced but still belongs to that account. Conflating the two was a
+ * real cross-account leak (a stranded unsynced note from one account could
+ * get adopted by a different account signing in on the same device); see
+ * `isMigratable`/`isPurgeable` below and the amendment in
+ * docs/adr/0002-offline-first-local-storage.md.
  */
 export type LocalNote = {
   id: string;
@@ -25,7 +36,37 @@ export type LocalNote = {
   editedAt: string;
   syncedAt: string | null;
   deleted: boolean;
+  ownerId: string | null;
 };
+
+/**
+ * Sign-in eligibility: a record adopts into the signing-in account only if
+ * it's genuinely anonymous-origin (`ownerId === null`) or it's the same
+ * account resuming its own previously-stranded, not-yet-synced note on
+ * this device. Never a different account's `ownerId` -- that's the
+ * cross-account leak this type exists to prevent, regardless of
+ * `syncedAt`.
+ */
+export function isMigratable(
+  note: Pick<LocalNote, "ownerId">,
+  currentUserId: string,
+): boolean {
+  return note.ownerId === null || note.ownerId === currentUserId;
+}
+
+/**
+ * Sign-out purge eligibility: only a record owned by the signing-out
+ * account AND already confirmed synced (recoverable from the server) is
+ * safe to delete. A same-account record that's still unsynced is left
+ * alone -- not lost, not purged, just inert locally until that account
+ * signs back in on this device (where `isMigratable` picks it back up).
+ */
+export function isPurgeable(
+  note: Pick<LocalNote, "ownerId" | "syncedAt">,
+  signingOutUserId: string,
+): boolean {
+  return note.ownerId === signingOutUserId && note.syncedAt !== null;
+}
 
 // A dedicated IndexedDB database/store, separate from any other client
 // storage this app might add later -- idb-keyval's default store is
@@ -97,16 +138,19 @@ export async function purgeNote(id: string): Promise<void> {
 }
 
 /**
- * Removes every Synced note's local copy -- called on sign-out so a
- * previous account's notes don't linger in this browser's storage once
- * it's back to being an anonymous session. Local-only notes (syncedAt
- * still null -- never pushed) are untouched: they're this browser's own
- * data, independent of any account, and sign-out must never lose them.
+ * Removes this account's already-synced local copies -- called on sign-out
+ * so a previous account's confirmed-synced notes don't linger in this
+ * browser's storage once it's back to being an anonymous session. Genuine
+ * Local-only notes (`ownerId === null`) are always untouched, and -- since
+ * `isPurgeable` requires both ownership AND `syncedAt !== null` -- so is
+ * this account's own still-unsynced note: it stays put, recoverable the
+ * next time this account signs in on this device, rather than being
+ * silently destroyed.
  */
-export async function purgeSyncedNotes(): Promise<void> {
+export async function purgeSyncedNotes(signingOutUserId: string): Promise<void> {
   const all = await safeValues<LocalNote>(store);
   await Promise.all(
-    all.filter((n) => n.syncedAt !== null).map((n) => safeDel(n.id, store)),
+    all.filter((n) => isPurgeable(n, signingOutUserId)).map((n) => safeDel(n.id, store)),
   );
 }
 

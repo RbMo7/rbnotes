@@ -6,10 +6,13 @@ import {
   listNotes,
   tombstoneNote,
   purgeNote,
+  purgeSyncedNotes,
   markSynced,
   getOrCreateDeviceId,
   setThemeMeta,
   getThemeMeta,
+  isMigratable,
+  isPurgeable,
   type LocalNote,
 } from "@/lib/local-notes-store";
 
@@ -23,6 +26,7 @@ function note(overrides: Partial<LocalNote> & { id: string }): LocalNote {
     editedAt: "2026-01-01T00:00:00.000Z",
     syncedAt: null,
     deleted: false,
+    ownerId: null,
     ...overrides,
   };
 }
@@ -103,5 +107,58 @@ describe("local-notes-store", () => {
     expect(await getThemeMeta()).toBe("dark");
     await setThemeMeta("light");
     expect(await getThemeMeta()).toBe("light");
+  });
+
+  describe("isMigratable", () => {
+    it("is true for a genuinely anonymous-origin note (ownerId: null)", () => {
+      expect(isMigratable({ ownerId: null }, "alice")).toBe(true);
+    });
+
+    it("is true for the same account resuming its own note", () => {
+      expect(isMigratable({ ownerId: "alice" }, "alice")).toBe(true);
+    });
+
+    it("is false for a different account's note, regardless of intent -- this is the cross-account-leak guard", () => {
+      expect(isMigratable({ ownerId: "alice" }, "bob")).toBe(false);
+    });
+  });
+
+  describe("isPurgeable", () => {
+    it("is true only for the signing-out account's own already-synced note", () => {
+      expect(isPurgeable({ ownerId: "alice", syncedAt: "2026-01-01T00:00:00.000Z" }, "alice")).toBe(
+        true,
+      );
+    });
+
+    it("is false for the same account's still-unsynced note -- never destroy a pending edit", () => {
+      expect(isPurgeable({ ownerId: "alice", syncedAt: null }, "alice")).toBe(false);
+    });
+
+    it("is false for a genuinely anonymous note -- sign-out must never touch Local-only data", () => {
+      expect(isPurgeable({ ownerId: null, syncedAt: "2026-01-01T00:00:00.000Z" }, "alice")).toBe(
+        false,
+      );
+    });
+
+    it("is false for a different account's synced note", () => {
+      expect(isPurgeable({ ownerId: "bob", syncedAt: "2026-01-01T00:00:00.000Z" }, "alice")).toBe(
+        false,
+      );
+    });
+  });
+
+  describe("purgeSyncedNotes", () => {
+    it("removes only the signing-out account's own synced notes", async () => {
+      await setNote(note({ id: "alice-synced", ownerId: "alice", syncedAt: "2026-01-01T00:00:00.000Z" }));
+      await setNote(note({ id: "alice-unsynced", ownerId: "alice", syncedAt: null }));
+      await setNote(note({ id: "anonymous", ownerId: null, syncedAt: null }));
+      await setNote(note({ id: "bob-synced", ownerId: "bob", syncedAt: "2026-01-01T00:00:00.000Z" }));
+
+      await purgeSyncedNotes("alice");
+
+      const remainingIds = (await listNotes()).map((n) => n.id).sort();
+      expect(remainingIds).toEqual(["anonymous", "bob-synced", "alice-unsynced"].sort());
+      expect(await getNote("alice-synced")).toBeUndefined();
+    });
   });
 });
