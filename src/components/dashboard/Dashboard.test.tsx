@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 describe("Dashboard", () => {
-  it("renders the desktop landing screen (quote + recent notes) at desktop widths", () => {
+  it("renders the desktop landing screen (stats + recent notes) at desktop widths", () => {
     render(<Dashboard email="a@b.com" />);
     expect(screen.getByText("shipping-plan.md")).toBeTruthy();
   });

@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useIsDesktop } from "@/lib/use-is-desktop";
-import { pickRandomQuote, type Quote } from "@/lib/quotes";
 import { useSignOut } from "@/lib/use-sign-out";
-import { QuoteBanner } from "@/components/dashboard/QuoteBanner";
+import { DashboardStats } from "@/components/dashboard/DashboardStats";
 import { RecentNotesList } from "@/components/dashboard/RecentNotesList";
 import { ShortcutCheatsheet } from "@/components/dashboard/ShortcutCheatsheet";
 import { SidebarLists } from "@/components/shell/sidebar/SidebarLists";
@@ -27,16 +25,6 @@ export function Dashboard({ email }: { email: string | null }) {
   const { createAndOpenNote } = useWorkspace();
   const isDesktop = useIsDesktop();
   const signOut = useSignOut();
-  // Picked client-side only, after mount: Math.random() during SSR and
-  // again on the client's first render pick different quotes, which is a
-  // hydration mismatch (server-rendered text != client text). Deferring to
-  // an effect means the server (and the client's first render, before
-  // hydration) render nothing here, and the real quote appears a tick
-  // later -- never a mismatch, just a one-frame-later small text line.
-  const [quote, setQuote] = useState<Quote | null>(null);
-  useEffect(() => {
-    setQuote(pickRandomQuote());
-  }, []);
 
   if (isDesktop === false) {
     return (
@@ -86,7 +74,7 @@ export function Dashboard({ email }: { email: string | null }) {
       <div className="w-full max-w-2xl flex flex-col items-center gap-space-6">
         <div className="flex flex-col items-center gap-space-2">
           <Image src="/logo.svg" alt="RbNotes" width={40} height={40} className="h-10 w-auto" />
-          {quote && <QuoteBanner quote={quote} />}
+          <DashboardStats />
         </div>
 
         <RecentNotesList />
