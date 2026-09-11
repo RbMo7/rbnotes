@@ -18,6 +18,7 @@ import { WorkspaceBuffer } from "@/components/workspace/WorkspaceBuffer";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { AppShell } from "@/components/shell/AppShell";
 import { DeviceTracking } from "@/components/shell/DeviceTracking";
+import { SyncingNotesToast } from "@/components/shell/SyncingNotesToast";
 
 function mostRecentOpenNote(notes: NoteRecord[]): NoteRecord | undefined {
   return notes
@@ -48,7 +49,7 @@ export function WorkspaceProvider({
 
   const { data: notes } = useNotesQuery();
   useLocalNotesQuery(!email);
-  useMigrateLocalNotes(email);
+  const migrationProgress = useMigrateLocalNotes(email);
   const { activeNoteId, open } = useWorkspaceNav();
   const createNote = useCreateNote();
   const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);
@@ -101,6 +102,7 @@ export function WorkspaceProvider({
   return (
     <WorkspaceContextProvider value={api}>
       {!email && <DeviceTracking />}
+      <SyncingNotesToast total={migrationProgress.total} current={migrationProgress.current} />
       <Sidebar />
       <AppShell email={email}>{inNotesSection ? <WorkspaceBuffer /> : children}</AppShell>
     </WorkspaceContextProvider>

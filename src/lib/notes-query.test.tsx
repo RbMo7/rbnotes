@@ -27,7 +27,13 @@ vi.mock("@/lib/local-notes-store", () => ({
   markSynced: mocks.markLocalSynced,
 }));
 
-import { warmAllNotes, isFullyWarm, useNotesQuery, useLocalNotesQuery } from "@/lib/notes-query";
+import {
+  warmAllNotes,
+  isFullyWarm,
+  useNotesQuery,
+  useLocalNotesQuery,
+  useMigrateLocalNotes,
+} from "@/lib/notes-query";
 
 function note(overrides: Partial<NoteRecord> & { id: string }): NoteRecord {
   return {
@@ -229,6 +235,70 @@ describe("useLocalNotesQuery", () => {
   it("does nothing when disabled -- a Synced session gets its data from the server prefetch instead", async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     renderHook(() => useLocalNotesQuery(false), { wrapper: wrapper(queryClient) });
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(mocks.listNotes).not.toHaveBeenCalled();
+  });
+});
+
+function localNote(id: string, syncedAt: string | null) {
+  return {
+    id,
+    title: "untitled",
+    content: "hi",
+    pinned: false,
+    archived: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    editedAt: "2026-01-01T00:00:00.000Z",
+    syncedAt,
+    deleted: false,
+  };
+}
+
+describe("useMigrateLocalNotes", () => {
+  beforeEach(() => {
+    mocks.listNotes.mockReset();
+    mocks.saveNoteContentAction.mockReset();
+    mocks.markLocalSynced.mockReset();
+  });
+
+  it("reports progress as each unsynced local note is pushed, and leaves synced ones alone", async () => {
+    mocks.listNotes.mockResolvedValue([
+      localNote("a", null),
+      localNote("b", "2026-01-01T00:00:00.000Z"), // already synced -- not migrated
+      localNote("c", null),
+    ]);
+    mocks.saveNoteContentAction.mockImplementation(({ noteId }: { noteId: string }) =>
+      Promise.resolve({ title: "untitled", updatedAt: `${noteId}-synced` }),
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useMigrateLocalNotes("user@example.com"), {
+      wrapper: wrapper(queryClient),
+    });
+
+    await waitFor(() => expect(result.current).toEqual({ total: 2, current: 2 }));
+    expect(mocks.saveNoteContentAction).toHaveBeenCalledTimes(2);
+    expect(mocks.saveNoteContentAction).not.toHaveBeenCalledWith(
+      expect.objectContaining({ noteId: "b" }),
+    );
+  });
+
+  it("stays at {total: 0, current: 0} when nothing needs migrating", async () => {
+    mocks.listNotes.mockResolvedValue([localNote("a", "2026-01-01T00:00:00.000Z")]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useMigrateLocalNotes("user@example.com"), {
+      wrapper: wrapper(queryClient),
+    });
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(result.current).toEqual({ total: 0, current: 0 });
+    expect(mocks.saveNoteContentAction).not.toHaveBeenCalled();
+  });
+
+  it("does nothing for an anonymous session", async () => {
+    mocks.listNotes.mockResolvedValue([localNote("a", null)]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderHook(() => useMigrateLocalNotes(null), { wrapper: wrapper(queryClient) });
 
     await new Promise((r) => setTimeout(r, 10));
     expect(mocks.listNotes).not.toHaveBeenCalled();

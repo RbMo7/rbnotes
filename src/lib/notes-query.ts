@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   getAllNotesMetaAction,
@@ -91,9 +91,16 @@ export function useLocalNotesQuery(enabled: boolean) {
  * my existing local notes, so upgrading doesn't feel like starting over."
  * Naturally idempotent -- once pushed, syncedAt is set, so a later mount
  * (e.g. reloading while still signed in) finds nothing left to migrate.
+ *
+ * Returns migration progress so the caller can show it -- this used to run
+ * silently, which for anyone with more than a couple of local notes just
+ * looked like nothing happened (or worse, like the notes were gone) for
+ * however long the pushes took.
  */
-export function useMigrateLocalNotes(email: string | null) {
+export function useMigrateLocalNotes(email: string | null): { total: number; current: number } {
   const { addNote } = useNotesMutations();
+  const [progress, setProgress] = useState({ total: 0, current: 0 });
+
   useEffect(() => {
     if (!email) return;
     // Dev Strict Mode mounts every effect twice; without this guard, both
@@ -103,7 +110,11 @@ export function useMigrateLocalNotes(email: string | null) {
     let cancelled = false;
     void (async () => {
       const local = await listNotes();
-      for (const n of local.filter((note) => note.syncedAt === null)) {
+      const unsynced = local.filter((note) => note.syncedAt === null);
+      if (unsynced.length === 0) return;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setProgress({ total: unsynced.length, current: 0 });
+      for (const n of unsynced) {
         if (cancelled) return;
         try {
           const result = await saveNoteContentAction({ noteId: n.id, content: n.content });
@@ -120,6 +131,8 @@ export function useMigrateLocalNotes(email: string | null) {
           });
         } catch {
           // Best-effort -- stays unsynced, retried on the next sign-in mount.
+        } finally {
+          if (!cancelled) setProgress((p) => ({ ...p, current: p.current + 1 }));
         }
       }
     })();
@@ -127,6 +140,8 @@ export function useMigrateLocalNotes(email: string | null) {
       cancelled = true;
     };
   }, [email, addNote]);
+
+  return progress;
 }
 
 /** True once every note in the cache has its content warmed -- the boundary hybrid search resolves on. */
