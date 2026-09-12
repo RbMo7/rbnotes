@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COMMAND } from "@/components/editor/command-dispatch";
 
-type CommandChip = { label: string; full: string; desc: string; danger?: boolean };
+export type CommandChip = { label: string; full: string; desc: string; danger?: boolean };
 
 /**
  * Every command, buffer-only ones included. The in-buffer dock shows all
@@ -123,7 +123,23 @@ export function CommandDock({
     }
     if (e.key === "Enter") {
       e.preventDefault();
-      onSubmit(value);
+      const typed = value.trim();
+      // Complete a partial like "chea" to the full "cheat" it's highlighted
+      // as -- but only when that's unambiguous: exactly one chip currently
+      // matches, or the typed text already exactly names one (Tab already
+      // fills `value` in full when cycling, so a Tab-then-Enter flow lands
+      // here too). Several chips still matching ("s" -> share/set.../...)
+      // submits the raw typed text unchanged instead of guessing which one
+      // was meant -- dispatchCommand's own "not an editor command" error is
+      // exactly the right outcome there, not a silently-wrong command.
+      // `:delete` is the one exception that must be typed in full: it never
+      // auto-completes from a partial, only ever runs when already typed
+      // out exactly (still true here since a partial has target.full !==
+      // typed, so danger blocks only the *expansion*, never the literal
+      // fully-typed word).
+      const target = matches.find((m) => m.full === typed) ?? (matches.length === 1 ? matches[0] : undefined);
+      const shouldExpand = typed.length > 0 && !!target && !target.danger && target.full !== typed;
+      onSubmit(shouldExpand ? target.full : value);
       return;
     }
     if (e.key === "Tab") {
