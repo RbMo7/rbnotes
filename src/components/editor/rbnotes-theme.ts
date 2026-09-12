@@ -136,6 +136,22 @@ export function rbnotesTheme(mode: "NORMAL" | "INSERT" | "VISUAL" | "EDIT" | "RO
       ".cm-placeholder": {
         color: mix(colors.onSurfaceVariant, 40),
       },
+      // The note's own title line (extensions.ts's titleLineHighlight marks
+      // line 1 with this class, only when it actually reads as a heading) --
+      // bigger and in the accent color, so it reads as unmistakably *the*
+      // title rather than just another `#` heading the doc happens to have.
+      // `!important`: the heading text's own span already carries an
+      // explicit font-size/color from rbnotesMarkdownHighlight's t.heading1
+      // rule (same element, generated class) -- a plain override here would
+      // lose to it depending on DOM nesting the syntax highlighter controls,
+      // not us; `!important` wins outright regardless of that nesting.
+      ".cm-title-line, .cm-title-line span": {
+        fontSize: "1.5rem !important",
+        lineHeight: "2rem !important",
+        fontWeight: "800 !important",
+        color: `${colors.primary} !important`,
+        letterSpacing: "-0.01em",
+      },
       // The in-document look for a `#tag` (extensions.ts's tagPillDecorations
       // marks it with this class) -- a real pill, not just bold colored
       // text, so it visually reads as a tag rather than emphasized prose.

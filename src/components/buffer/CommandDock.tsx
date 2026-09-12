@@ -73,6 +73,7 @@ export function CommandDock({
   const [value, setValue] = useState("");
   const [activeChip, setActiveChip] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -82,7 +83,17 @@ export function CommandDock({
       setValue("");
       setActiveChip(0);
       // Focus after the dock has actually mounted/painted.
-      requestAnimationFrame(() => inputRef.current?.focus());
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        // Neither `sticky bottom-0` (the in-buffer dock) nor plain document
+        // flow (the Dashboard's) guarantees the dock is already inside the
+        // visible scrollport the instant it mounts -- a short window, or a
+        // tall Dashboard note list already scrolled up, can leave the whole
+        // thing (grid and all) sitting above or below the fold with nothing
+        // visibly happening when `:` is pressed. Force it into view instead
+        // of hoping the existing scroll position already happens to show it.
+        dockRef.current?.scrollIntoView({ block: "end" });
+      });
     }
   }, [open]);
 
@@ -125,7 +136,7 @@ export function CommandDock({
   };
 
   return (
-    <div className="sticky bottom-0 z-30 bg-surface-container-lowest shadow-2xl">
+    <div ref={dockRef} className="sticky bottom-0 z-30 bg-surface-container-lowest shadow-2xl">
       <div className="bg-surface-container-high px-space-4 py-space-2">
         <div className="flex items-center justify-between mb-space-1">
           <span className="text-label-sm font-label-sm text-outline uppercase tracking-wider">
@@ -135,7 +146,15 @@ export function CommandDock({
             {matches.length} matches
           </span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-space-2">
+        {/* Capped and independently scrollable -- the chip list has grown
+            past what fits in a short viewport (adding :pins/:home pushed it
+            to 5 rows), and this block is `sticky bottom-0` with no scroll of
+            its own otherwise: on a short window the whole sticky block's
+            height can exceed the visible area, and since it's pinned by its
+            *bottom* edge, the grid above simply scrolls off above the top --
+            the command line still showed, just with no chips visible above
+            it. */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-space-2 max-h-40 overflow-y-auto">
           {commands.map((chip) => {
             const isMatch = matches.includes(chip);
             const isActive = matches[activeChip] === chip;

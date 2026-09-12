@@ -9,9 +9,16 @@ import { useEffect, useRef, useState } from "react";
  * ratio to that baseline tracks zoom changes precisely -- unlike
  * `outerWidth / innerWidth`, which also moves with the scrollbar, devtools,
  * and window chrome and so reports a false ~104% even sitting at a real
- * 100% (the bug this replaced). There's no "zoom changed" event, so this
- * re-subscribes a `matchMedia` query pinned to the *current* dppx each time
- * it stops matching -- the standard way to observe devicePixelRatio.
+ * 100%.
+ *
+ * Known tradeoff, accepted deliberately: a page reloaded at a non-100%
+ * browser zoom still reads "100%" (the baseline resets on every mount) --
+ * an absolute-zoom version was tried and pulled: solving for zoom from
+ * devicePixelRatio alone means guessing which OS display-scale factor it's
+ * layered on top of, and that guess was wrong often enough in practice to
+ * show worse (random-looking) numbers than this simpler relative version
+ * ever did. Live zoom changes during a session are what this needs to get
+ * right, and does.
  */
 export function useZoomLevel(): number {
   const [zoom, setZoom] = useState(100);

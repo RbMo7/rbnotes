@@ -156,7 +156,13 @@ export function matchGlobalShortcut(
   for (const shortcut of GLOBAL_SHORTCUTS) {
     if (shortcut.ctrl !== ctrl) continue;
     if (event.altKey) continue;
-    if (event.shiftKey !== (shortcut.shift ?? false)) continue;
+    // Only chorded (ctrl) shortcuts care about Shift as an independent
+    // disambiguator (Ctrl+P vs Ctrl+Shift+P) -- a bare character key like
+    // ':' or '?' already bakes Shift into which character was produced
+    // (':' IS Shift+';' on a US layout), so checking shiftKey there too
+    // rejected every plain ':' keydown outright (shortcut.shift defaults
+    // to false, but event.shiftKey is genuinely true for ':').
+    if (shortcut.ctrl && event.shiftKey !== (shortcut.shift ?? false)) continue;
     if (event.key.toLowerCase() !== shortcut.key) continue;
     if (shortcut.modes.length > 0 && mode !== null && !shortcut.modes.includes(mode)) {
       continue;

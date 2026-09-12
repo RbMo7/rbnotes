@@ -14,7 +14,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { searchKeymap } from "@codemirror/search";
 import { vim, getCM, Vim } from "@replit/codemirror-vim";
 import { rbnotesTheme, rbnotesMarkdownHighlight } from "@/components/editor/rbnotes-theme";
-import { rbnotesMarkdown, lineNumberGutter, tagPillDecorations } from "@/components/editor/extensions";
+import { rbnotesMarkdown, lineNumberGutter, tagPillDecorations, titleLineHighlight } from "@/components/editor/extensions";
 import { livePreview, setPreviewMode } from "@/components/editor/live-preview";
 import { matchGlobalShortcut, type Intent } from "@/components/editor/shortcuts";
 import { isH1Line } from "@/lib/markdown-title";
@@ -340,6 +340,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
       rbnotesMarkdown,
       rbnotesMarkdownHighlight,
       tagPillDecorations,
+      titleLineHighlight,
       // A note's title is its first `# heading` (lib/markdown-title.ts) --
       // there's no separate title field to fill in, which isn't obvious
       // the first time a blank "untitled" note opens. CodeMirror's own

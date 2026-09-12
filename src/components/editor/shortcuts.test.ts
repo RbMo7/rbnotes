@@ -91,6 +91,19 @@ describe("matchGlobalShortcut", () => {
     expect(matchGlobalShortcut(key({ key: ":", ctrlKey: true }), "NORMAL")).toBeNull();
   });
 
+  it("regression: ':' still matches with the real shiftKey a US keyboard actually sends for it (Shift+;)", () => {
+    // The fake KeyboardEventInit above never set shiftKey for ':', which is
+    // why adding Ctrl+Shift+P's shift check regressed ':' without any unit
+    // test catching it -- a real ':' keydown has shiftKey true, and the
+    // command-line row's `shift` is (implicitly) false.
+    expect(matchGlobalShortcut(key({ key: ":", shiftKey: true }), "NORMAL")).toEqual({
+      type: "openCommandDock",
+    });
+    expect(matchGlobalShortcut(key({ key: ":", shiftKey: true }), null)).toEqual({
+      type: "openCommandDock",
+    });
+  });
+
   it("ignores unmodified letter keys and unknown chords", () => {
     expect(matchGlobalShortcut(key({ key: "n" }), "NORMAL")).toBeNull();
     expect(matchGlobalShortcut(key({ key: "q", ctrlKey: true }), "NORMAL")).toBeNull();

@@ -13,6 +13,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
 import type { EditorState } from "@codemirror/state";
 import { TAG_PATTERN } from "@/lib/tags";
+import { isH1Line } from "@/lib/markdown-title";
 
 export type LineNumberMode = "off" | "absolute" | "relative" | "hybrid";
 
@@ -101,6 +102,44 @@ export const tagPillDecorations = ViewPlugin.fromClass(
     }
     update(update: ViewUpdate) {
       this.decorations = tagMatcher.updateDeco(update, this.decorations);
+    }
+  },
+  { decorations: (v) => v.decorations },
+);
+
+const titleLineMark = Decoration.line({ class: "cm-title-line" });
+
+function computeTitleLineDeco(view: EditorView): DecorationSet {
+  const firstLine = view.state.doc.line(1);
+  // A note's title IS this line (lib/markdown-title.ts) -- but only when it
+  // actually reads as one; an untyped/placeholder first line shouldn't be
+  // singled out visually as if it already were the title.
+  if (!isH1Line(firstLine.text)) return Decoration.none;
+  return Decoration.set([titleLineMark.range(firstLine.from)]);
+}
+
+/**
+ * Makes the note's own title line -- its first `# heading` -- read as
+ * unmistakably *the* title rather than just another heading: TopBar's own
+ * title only ever echoes this same line (see Editor.tsx's
+ * onTitleRevealChange), so it needs to look distinct even from a same-level
+ * `#` heading used mid-document. rbnotesMarkdownHighlight's `t.heading1`
+ * rule already sizes every `#` heading, uniformly by syntax alone -- it
+ * can't single out line 1 specifically, which is exactly why this is a
+ * separate position-aware decoration (a plain `.cm-line` class) rather than
+ * a highlight-style tweak. Its CSS (rbnotes-theme.ts) needs `!important`:
+ * the line class and t.heading1's own generated class both match the same
+ * heading text, and only `!important` reliably wins that instead of
+ * whichever the syntax highlighter's own DOM nesting happens to prefer.
+ */
+export const titleLineHighlight = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = computeTitleLineDeco(view);
+    }
+    update(update: ViewUpdate) {
+      if (update.docChanged) this.decorations = computeTitleLineDeco(update.view);
     }
   },
   { decorations: (v) => v.decorations },
