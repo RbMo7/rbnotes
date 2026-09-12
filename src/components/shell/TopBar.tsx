@@ -24,6 +24,7 @@ export function TopBar({ email }: { email: string | null }) {
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useWorkspaceStore((s) => s.toggleSidebar);
   const toggleInspector = useWorkspaceStore((s) => s.toggleInspector);
+  const titleRevealed = useWorkspaceStore((s) => s.titleRevealed);
   const { activeNoteId } = useWorkspace();
   const { data: notes } = useNotesQuery();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -46,6 +47,13 @@ export function TopBar({ email }: { email: string | null }) {
   const activeNote = activeNoteId ? notes?.find((n) => n.id === activeNoteId) : undefined;
   const title = activeNote ? displayFilename(activeNote.title) : (SECTION_TITLES[pathname] ?? "");
 
+  // The header's own title only earns its keep once the real one (the
+  // note's H1, on screen in the buffer) isn't -- see Editor's
+  // onTitleRevealChange. Dashboard/Settings have no such H1 to defer to, so
+  // their section label always shows at full height; `titleRevealed`
+  // defaults true outside a note buffer for exactly that reason.
+  const compact = !!activeNote && !titleRevealed;
+
   // Below the mobile breakpoint there's no sidebar to toggle -- its browse
   // role lives in the Dashboard route's List screen instead (CONTEXT.md).
   // A note open there is the Note screen, and this button becomes its one
@@ -66,7 +74,7 @@ export function TopBar({ email }: { email: string | null }) {
   return (
     <header
       data-collapsed={collapsed}
-      className={`fixed top-0 right-0 h-header-height bg-surface/90 border-b border-outline-variant/30 z-30 flex items-center justify-between px-space-6 backdrop-blur-sm transition-[left] duration-150 ${headerOffsetClass}`}
+      className={`fixed top-0 right-0 bg-surface/90 border-b border-outline-variant/30 z-30 flex items-center justify-between px-space-6 backdrop-blur-sm transition-[left,height] duration-150 ${headerOffsetClass} ${compact ? "h-header-height-compact" : "h-header-height"}`}
     >
       <div className="flex items-center gap-space-4 min-w-0">
         {showLeadingButton && (
@@ -84,7 +92,7 @@ export function TopBar({ email }: { email: string | null }) {
           </button>
         )}
         <span
-          className="text-primary font-headline-md text-headline-md tracking-tight truncate"
+          className={`text-primary font-headline-sm text-headline-sm tracking-tight truncate transition-opacity duration-150 ${compact ? "opacity-0" : "opacity-100"}`}
           title={title}
         >
           {title}
@@ -118,6 +126,13 @@ export function TopBar({ email }: { email: string | null }) {
               <div className="px-space-3 py-space-2 font-label-sm text-label-sm text-outline border-b border-outline-variant truncate">
                 {email ?? "Local only"}
               </div>
+              <Link
+                href="/"
+                className="block px-space-3 py-space-2 font-body-sm text-body-sm text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface"
+                onClick={() => setMenuOpen(false)}
+              >
+                Dashboard
+              </Link>
               {email ? (
                 <>
                   <Link

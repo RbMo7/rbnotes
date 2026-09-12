@@ -6,7 +6,7 @@ import {
   type IntentHandlers,
 } from "@/components/editor/shortcuts";
 
-// A plain stub: the predicate only reads these four fields, so the pure test
+// A plain stub: the predicate only reads these five fields, so the pure test
 // needs no DOM.
 function key(init: KeyboardEventInit): KeyboardEvent {
   return {
@@ -14,6 +14,7 @@ function key(init: KeyboardEventInit): KeyboardEvent {
     ctrlKey: !!init.ctrlKey,
     metaKey: !!init.metaKey,
     altKey: !!init.altKey,
+    shiftKey: !!init.shiftKey,
   } as unknown as KeyboardEvent;
 }
 
@@ -39,6 +40,15 @@ describe("matchGlobalShortcut", () => {
     });
     expect(matchGlobalShortcut(key({ key: "b", ctrlKey: true }), "NORMAL")).toEqual({
       type: "toggleSidebar",
+    });
+  });
+
+  it("Ctrl+Shift+P opens the pinned switcher, distinct from bare Ctrl+P", () => {
+    expect(
+      matchGlobalShortcut(key({ key: "p", ctrlKey: true, shiftKey: true }), null),
+    ).toEqual({ type: "openPinnedSwitcher" });
+    expect(matchGlobalShortcut(key({ key: "p", ctrlKey: true }), null)).toEqual({
+      type: "openQuickSwitcher",
     });
   });
 
@@ -74,8 +84,10 @@ describe("matchGlobalShortcut", () => {
     expect(matchGlobalShortcut(key({ key: ":" }), "VISUAL")).toBeNull();
   });
 
-  it("never opens the command dock outside the editor (no mode) or with a modifier", () => {
-    expect(matchGlobalShortcut(key({ key: ":" }), null)).toBeNull();
+  it("opens the command dock outside the editor too (no mode, e.g. the Dashboard), but never with a modifier", () => {
+    expect(matchGlobalShortcut(key({ key: ":" }), null)).toEqual({
+      type: "openCommandDock",
+    });
     expect(matchGlobalShortcut(key({ key: ":", ctrlKey: true }), "NORMAL")).toBeNull();
   });
 
@@ -95,6 +107,7 @@ describe("dispatchIntent", () => {
       save: vi.fn(),
       newNote: vi.fn(),
       openQuickSwitcher: vi.fn(),
+      openPinnedSwitcher: vi.fn(),
       openSearch: vi.fn(),
       toggleSidebar: vi.fn(),
       openCommandDock: vi.fn(),
@@ -139,7 +152,15 @@ describe("GLOBAL_SHORTCUTS", () => {
 
   it("exposes exactly the modifier chords in global help", () => {
     const globalLabels = GLOBAL_SHORTCUTS.filter((s) => s.inGlobalHelp).map((s) => s.label);
-    expect(globalLabels).toEqual(["Ctrl+S", "Ctrl+N", "Ctrl+P", "Ctrl+B", "Ctrl+/", "Ctrl+T"]);
+    expect(globalLabels).toEqual([
+      "Ctrl+S",
+      "Ctrl+N",
+      "Ctrl+P",
+      "Ctrl+Shift+P",
+      "Ctrl+B",
+      "Ctrl+/",
+      "Ctrl+T",
+    ]);
     // The editor-only command-line row stays out of the global section.
     expect(GLOBAL_SHORTCUTS.find((s) => s.id === "command-line")?.inGlobalHelp).toBe(false);
   });

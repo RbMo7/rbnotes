@@ -1,3 +1,5 @@
+import type { Settings } from "@/lib/schemas";
+
 /**
  * The Stitch design always shows notes as filenames — "daily-scratchpad.md",
  * "rabbitmq.md" — never as plain titles. `Note.title` is stored as the bare
@@ -23,6 +25,26 @@ export function formatRelativeCreated(date: Date): string {
   if (diffHr < 24) return `${diffHr}h ago`;
   const diffDay = Math.floor(diffHr / 24);
   return `${diffDay}d ago`;
+}
+
+/**
+ * One human-readable line for whichever setting just changed -- shared by
+ * `:set`'s command-line feedback and the Settings page's own toast, so a
+ * given change reads identically no matter which surface made it. Takes the
+ * literal patch object each caller already builds (a single `{key: value}`
+ * per call, at both sites), rather than a raw value, to stay derived from
+ * `Settings`'s own key names.
+ */
+export function describeSettingsPatch(patch: Partial<Settings>): string {
+  if ("theme" in patch) return `theme: ${patch.theme}`;
+  if ("lineNumbers" in patch) {
+    const label = patch.lineNumbers === "hybrid" ? "hybrid (relative)" : patch.lineNumbers;
+    return `line numbers: ${label}`;
+  }
+  if ("tabSize" in patch) return `tab size: ${patch.tabSize}`;
+  if ("wordWrap" in patch) return `word wrap: ${patch.wordWrap ? "on" : "off"}`;
+  if ("autosave" in patch) return `autosave: ${patch.autosave ? "on" : "off"}`;
+  return "settings updated";
 }
 
 /** Short content hash for the buffer sub-header's "SHA: b83f1e9" chip. */

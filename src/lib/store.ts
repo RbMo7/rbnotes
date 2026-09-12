@@ -48,6 +48,9 @@ type WorkspaceState = {
   quickSwitcherOpen: boolean;
   setQuickSwitcherOpen: (open: boolean) => void;
 
+  pinnedSwitcherOpen: boolean;
+  setPinnedSwitcherOpen: (open: boolean) => void;
+
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
 
@@ -108,6 +111,14 @@ type WorkspaceState = {
   // had). Null outside a note buffer, or while it's still cold.
   activeBufferInfo: { wordCount: number; hash: string; createdAt: string } | null;
   setActiveBufferInfo: (info: WorkspaceState["activeBufferInfo"]) => void;
+
+  // Whether the active note's own title line (its first `# heading`) has
+  // scrolled out of view -- lets TopBar show its own title only once the
+  // real one on screen isn't visible, instead of always duplicating it (see
+  // Editor's onTitleRevealChange). true outside a note buffer (there's no
+  // title line to defer to), so the header's section label always shows.
+  titleRevealed: boolean;
+  setTitleRevealed: (revealed: boolean) => void;
 
   // Editor display settings. Seeded once from the server at the top of the
   // (app) layout (SettingsHydrator) so both the Settings page and every
@@ -196,6 +207,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   quickSwitcherOpen: false,
   setQuickSwitcherOpen: (quickSwitcherOpen) => set({ quickSwitcherOpen }),
 
+  pinnedSwitcherOpen: false,
+  setPinnedSwitcherOpen: (pinnedSwitcherOpen) => set({ pinnedSwitcherOpen }),
+
   searchOpen: false,
   setSearchOpen: (searchOpen) => set({ searchOpen }),
 
@@ -227,6 +241,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
 
   activeBufferInfo: null,
   setActiveBufferInfo: (activeBufferInfo) => set({ activeBufferInfo }),
+
+  titleRevealed: true,
+  setTitleRevealed: (titleRevealed) => set({ titleRevealed }),
 
   settings: defaultSettings,
   setSettings: (settings) => set({ settings }),

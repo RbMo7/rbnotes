@@ -3,6 +3,7 @@
 import { HelpCircle } from "lucide-react";
 import { useWorkspaceStore, type VimMode } from "@/lib/store";
 import { formatRelativeCreated } from "@/lib/format";
+import { useZoomLevel } from "@/lib/use-zoom-level";
 
 // Both real Stitch screenshots (NORMAL and INSERT) render this exact pill in
 // solid `bg-primary`/`text-on-primary` — only the label changes between
@@ -24,6 +25,7 @@ export function StatusBar({ filename }: { filename: string | null }) {
   const cursorCol = useWorkspaceStore((s) => s.cursorCol);
   const bufferInfo = useWorkspaceStore((s) => s.activeBufferInfo);
   const setCheatsheetOpen = useWorkspaceStore((s) => s.setCheatsheetOpen);
+  const zoom = useZoomLevel();
 
   return (
     <footer className="fixed bottom-0 left-0 right-0 h-status-bar-height bg-surface-container-high border-t border-outline-variant/40 z-50 flex items-center justify-between px-space-4 font-label-sm text-label-sm">
@@ -73,7 +75,7 @@ export function StatusBar({ filename }: { filename: string | null }) {
           </>
         )}
         <span>|</span>
-        <span className="text-outline">100%</span>
+        <span className="text-outline">{zoom}%</span>
       </div>
       <button
         onClick={() => setCheatsheetOpen(true)}

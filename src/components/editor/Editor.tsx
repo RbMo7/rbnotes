@@ -59,7 +59,24 @@ type Props = {
   onIntent?: (intent: Intent) => void;
   /** Fired with the lowercased tag text (no `#`) when a `.cm-tag-pill` is clicked. */
   onTagClick?: (tag: string) => void;
+  /**
+   * Fired whenever the note's title line (its first `# heading` -- see
+   * lib/markdown-title.ts) scrolls out of view at the top, and again when it
+   * scrolls back in. Lets the header's own title (TopBar) stay hidden while
+   * the real one is already on screen, and fade in only once it isn't --
+   * `true` when there's no title line to hide behind at all, since there's
+   * then nothing for the header to be redundant with.
+   */
+  onTitleRevealChange?: (revealed: boolean) => void;
 };
+
+/** Has the note's title line scrolled fully above the visible top? */
+function computeTitleRevealed(view: EditorView): boolean {
+  if (view.state.doc.lines === 0) return true;
+  const firstLine = view.state.doc.line(1);
+  if (!isH1Line(firstLine.text)) return true;
+  return view.scrollDOM.scrollTop >= view.lineBlockAt(0).bottom;
+}
 
 function mapVimMode(raw: string | undefined): VimMode {
   if (!raw) return "NORMAL";
@@ -95,6 +112,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     onChange,
     onIntent,
     onTagClick,
+    onTitleRevealChange,
   },
   ref,
 ) {
@@ -141,6 +159,15 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
   onIntentRef.current = onIntent;
   const onTagClickRef = useRef(onTagClick);
   onTagClickRef.current = onTagClick;
+  const onTitleRevealChangeRef = useRef(onTitleRevealChange);
+  onTitleRevealChangeRef.current = onTitleRevealChange;
+  const titleRevealedRef = useRef<boolean | null>(null);
+  const reportTitleReveal = useCallback((view: EditorView) => {
+    const revealed = computeTitleRevealed(view);
+    if (titleRevealedRef.current === revealed) return;
+    titleRevealedRef.current = revealed;
+    onTitleRevealChangeRef.current?.(revealed);
+  }, []);
 
   /**
    * Must be called after *every* `view.setState(...)` (not just once at
@@ -298,6 +325,9 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
         const line = update.state.doc.lineAt(pos);
         setCursor(line.number, pos - line.from + 1);
       }
+      // Typing a title line into existence (or deleting it) changes what
+      // computeTitleRevealed sees even with the scroll position untouched.
+      if (update.docChanged) reportTitleReveal(update.view);
     });
 
     const extensions: Extension[] = [
@@ -334,6 +364,9 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
           if (!pill?.textContent) return false;
           onTagClickRef.current?.(pill.textContent.replace(/^#/, "").toLowerCase());
           return true;
+        },
+        scroll(_event, view) {
+          reportTitleReveal(view);
         },
       }),
       keymap.of([indentWithTab, ...historyKeymap, ...searchKeymap, ...defaultKeymap]),
@@ -481,6 +514,12 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     syncPreviewMode(view);
     activeIdRef.current = noteId;
     view.scrollDOM.scrollTop = scrollRef.current.get(noteId) ?? 0;
+    // Force a fresh report even if this note's reveal state happens to
+    // match the outgoing note's -- reportTitleReveal's own dedupe would
+    // otherwise skip the callback and leave the header showing/hiding the
+    // *previous* note's title for a beat.
+    titleRevealedRef.current = null;
+    reportTitleReveal(view);
 
     if (vimEnabled && !readOnly) view.focus();
     // vimEnabled/readOnly are genuine dependencies, not just read inside:
@@ -489,7 +528,7 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor(
     // without them here too, this effect would keep comparing against its
     // *last* noteId/content and, finding neither changed, never re-run to
     // populate the new view at all.
-  }, [noteId, content, ready, vimEnabled, readOnly, wireVimMode, syncPreviewMode]);
+  }, [noteId, content, ready, vimEnabled, readOnly, wireVimMode, syncPreviewMode, reportTitleReveal]);
 
   // Arrived at the active buffer from a global-search result click: select
   // the first occurrence of the query. Independent of the switch effect

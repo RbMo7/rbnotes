@@ -10,6 +10,7 @@ export type IntentMap = {
   save: true;
   newNote: true;
   openQuickSwitcher: true;
+  openPinnedSwitcher: true;
   openSearch: true;
   toggleSidebar: true;
   openCommandDock: true;
@@ -38,6 +39,8 @@ export type GlobalShortcut = {
   /** Lowercased `KeyboardEvent.key` to match. */
   key: string;
   ctrl: boolean;
+  /** Requires Shift too. Defaults to false -- omitting it on every other row keeps them from also matching a Shift-held chord that shares the same key. */
+  shift?: boolean;
   /** Vim modes the shortcut is legal in; empty means any mode (and no mode). */
   modes: VimMode[];
   /**
@@ -79,6 +82,17 @@ export const GLOBAL_SHORTCUTS: GlobalShortcut[] = [
     modes: [],
     inGlobalHelp: true,
     intent: { type: "openQuickSwitcher" },
+  },
+  {
+    id: "pinned-switcher",
+    label: "Ctrl+Shift+P",
+    description: "pinned notes switcher",
+    key: "p",
+    ctrl: true,
+    shift: true,
+    modes: [],
+    inGlobalHelp: true,
+    intent: { type: "openPinnedSwitcher" },
   },
   {
     id: "toggle-sidebar",
@@ -124,8 +138,14 @@ export const GLOBAL_SHORTCUTS: GlobalShortcut[] = [
 
 /**
  * The one predicate: keydown + current vim mode -> Intent, or nothing.
- * `mode` is null when focus is outside the editor (or vim is off), which is
- * why mode-gated shortcuts (only `:` today) simply never match there.
+ * `mode` is null exclusively for the shell-level listener (AppShell), which
+ * fires when there's no editor mounted/focused at all -- Editor.tsx's own
+ * listener always passes a real mode ("EDIT" as the vim-off sentinel, never
+ * null; see its handleCapture doc). So `mode === null` unambiguously means
+ * "no editor to misfire a plain `:` keystroke into," and mode-gated
+ * shortcuts are allowed through in that case; a *mounted* editor in the
+ * wrong mode (e.g. INSERT) still blocks them, so `:` keeps typing a literal
+ * colon there instead of opening the command dock.
  */
 export function matchGlobalShortcut(
   event: KeyboardEvent,
@@ -136,8 +156,9 @@ export function matchGlobalShortcut(
   for (const shortcut of GLOBAL_SHORTCUTS) {
     if (shortcut.ctrl !== ctrl) continue;
     if (event.altKey) continue;
+    if (event.shiftKey !== (shortcut.shift ?? false)) continue;
     if (event.key.toLowerCase() !== shortcut.key) continue;
-    if (shortcut.modes.length > 0 && (mode === null || !shortcut.modes.includes(mode))) {
+    if (shortcut.modes.length > 0 && mode !== null && !shortcut.modes.includes(mode)) {
       continue;
     }
     return shortcut.intent;

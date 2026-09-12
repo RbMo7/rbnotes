@@ -1,4 +1,5 @@
 import type { Settings } from "@/lib/schemas";
+import { describeSettingsPatch } from "@/lib/format";
 
 /**
  * The operations the command layer expects from the editor, as a small
@@ -31,6 +32,8 @@ export type WorkspaceOps = {
   openHelp: () => void;
   /** Opens the compact reference popup (footer's "Need help?") -- unlike openHelp, usable as a live reference while still typing. */
   openCheatsheet: () => void;
+  /** Opens the pinned-notes switcher (`:pins` / Ctrl+Shift+P). */
+  openPinnedSwitcher: () => void;
   /** Close the topmost overlay, mirroring Vim's `:q` closing a preview window. */
   quit: () => void;
   toggleSidebar: () => void;
@@ -38,8 +41,12 @@ export type WorkspaceOps = {
   share: () => void;
   unshare: () => void;
   updateSettings: (patch: Partial<Settings>) => void;
+  /** Current display settings -- lets `:set wrap` flip like a real switch instead of only ever forcing it on. */
+  getSettings: () => Settings;
   /** Navigate to the Settings page -- what bare `:set` (no option given) opens. */
   openSettings: () => void;
+  /** Navigate to the Dashboard. */
+  goHome: () => void;
   /** Navigate to /login -- a no-op (middleware bounces back to "/") if already signed in. */
   login: () => void;
   /** Sign out of a Synced session; notifies instead for a Local-only one (nothing to log out of). */
@@ -154,11 +161,17 @@ export async function dispatchCommand(raw: string, ops: EditorOps, ctx: CommandC
     case "cheat":
       ctx.workspace.openCheatsheet();
       return;
+    case "pins":
+      ctx.workspace.openPinnedSwitcher();
+      return;
     case "insp":
       ctx.workspace.toggleInspector();
       return;
     case "b":
       ctx.workspace.toggleSidebar();
+      return;
+    case "home":
+      ctx.workspace.goHome();
       return;
     case "share":
       ctx.workspace.share();
@@ -193,33 +206,43 @@ export async function dispatchCommand(raw: string, ops: EditorOps, ctx: CommandC
 // real options (ignorecase, hlsearch, ...) are untouched and still resolve
 // via the default branch above.
 function applyAppSetting(arg: string, ctx: CommandContext) {
+  // Every branch below both writes and confirms -- a `:set` typed blind
+  // (there's no visible checkbox to glance at, unlike the Settings page)
+  // otherwise gives no feedback that anything happened at all.
+  const apply = (patch: Partial<Settings>) => {
+    ctx.workspace.updateSettings(patch);
+    ctx.workspace.notify(`SET: ${describeSettingsPatch(patch)}`);
+  };
+
   switch (arg) {
     case "nu":
     case "number":
-      ctx.workspace.updateSettings({ lineNumbers: "absolute" });
+      apply({ lineNumbers: "absolute" });
       return;
     case "nonu":
     case "nonumber":
-      ctx.workspace.updateSettings({ lineNumbers: "off" });
+      apply({ lineNumbers: "off" });
       return;
     case "rnu":
     case "relativenumber":
-      ctx.workspace.updateSettings({ lineNumbers: "hybrid" });
+      apply({ lineNumbers: "hybrid" });
       return;
     case "nornu":
     case "norelativenumber":
-      ctx.workspace.updateSettings({ lineNumbers: "absolute" });
+      apply({ lineNumbers: "absolute" });
       return;
     case "wrap":
-      ctx.workspace.updateSettings({ wordWrap: true });
+      // A switch, not a one-way latch: repeating `:set wrap` flips it back
+      // off. `:set nowrap` still forces it off explicitly either way.
+      apply({ wordWrap: !ctx.workspace.getSettings().wordWrap });
       return;
     case "nowrap":
-      ctx.workspace.updateSettings({ wordWrap: false });
+      apply({ wordWrap: false });
       return;
     default:
       if (arg.startsWith("ts=") || arg.startsWith("tabsize=")) {
         const n = parseInt(arg.split("=")[1] ?? "", 10);
-        if (n >= 1 && n <= 8) ctx.workspace.updateSettings({ tabSize: n });
+        if (n >= 1 && n <= 8) apply({ tabSize: n });
         return;
       }
       ctx.workspace.notify(`E518: unknown option: ${arg}`);

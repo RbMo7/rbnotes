@@ -5,6 +5,7 @@ import {
   type CommandContext,
   type EditorOps,
 } from "@/components/editor/command-dispatch";
+import { defaultSettings } from "@/lib/schemas";
 
 function makeHarness(options: { execVimEx?: boolean; saveResult?: boolean } = {}) {
   const opsCalls: string[] = [];
@@ -30,13 +31,16 @@ function makeHarness(options: { execVimEx?: boolean; saveResult?: boolean } = {}
     notify: vi.fn(),
     openHelp: vi.fn(),
     openCheatsheet: vi.fn(),
+    openPinnedSwitcher: vi.fn(),
     quit: vi.fn(),
     toggleSidebar: vi.fn(),
     toggleInspector: vi.fn(),
     share: vi.fn(),
     unshare: vi.fn(),
     updateSettings: vi.fn(),
+    getSettings: vi.fn(() => ({ ...defaultSettings, wordWrap: false })),
     openSettings: vi.fn(),
+    goHome: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
   };
@@ -176,10 +180,26 @@ describe("dispatchCommand", () => {
     expect(h.workspace.updateSettings).toHaveBeenNthCalledWith(6, { tabSize: 4 });
   });
 
+  it(":set wrap toggles off the currently-on state instead of only ever forcing it on", async () => {
+    h.workspace.getSettings = vi.fn(() => ({ ...defaultSettings, wordWrap: true }));
+    await dispatchCommand("set wrap", h.ops, h.ctx);
+    expect(h.workspace.updateSettings).toHaveBeenCalledWith({ wordWrap: false });
+  });
+
   it(":set rejects an unknown app option with E518", async () => {
     await dispatchCommand("set bogus", h.ops, h.ctx);
     expect(h.workspace.updateSettings).not.toHaveBeenCalled();
     expect(h.workspace.notify).toHaveBeenCalledWith(expect.stringContaining("E518"));
+  });
+
+  it(":pins opens the pinned-notes switcher", async () => {
+    await dispatchCommand("pins", h.ops, h.ctx);
+    expect(h.workspace.openPinnedSwitcher).toHaveBeenCalledOnce();
+  });
+
+  it(":home navigates to the Dashboard", async () => {
+    await dispatchCommand("home", h.ops, h.ctx);
+    expect(h.workspace.goHome).toHaveBeenCalledOnce();
   });
 
   it(":set with no option opens Settings instead of erroring", async () => {

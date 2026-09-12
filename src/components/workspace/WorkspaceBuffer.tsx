@@ -72,6 +72,7 @@ export function WorkspaceBuffer() {
   const toggleInspector = useWorkspaceStore((s) => s.toggleInspector);
   const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);
   const setActiveBufferInfo = useWorkspaceStore((s) => s.setActiveBufferInfo);
+  const setTitleRevealed = useWorkspaceStore((s) => s.setTitleRevealed);
   const saveState = useWorkspaceStore((s) => s.saveState);
 
   // The editor's own listener produces intents; this is the one dispatcher
@@ -90,7 +91,13 @@ export function WorkspaceBuffer() {
     setInspectorOpen(false);
     setShareToken(null);
     setShareViewers([]);
-  }, [activeNoteId, setInspectorOpen]);
+    // Editor's own onTitleRevealChange re-reports this right after the
+    // switch (see its note-switch effect), but that fires from an effect a
+    // render later -- defaulting true here (rather than leaving the
+    // outgoing note's stale value) means the header never shows a
+    // just-closed note's title for that one frame.
+    setTitleRevealed(true);
+  }, [activeNoteId, setInspectorOpen, setTitleRevealed]);
 
   useEffect(() => {
     setMode(isDesktop === false ? "EDIT" : "NORMAL");
@@ -268,6 +275,7 @@ export function WorkspaceBuffer() {
     notify: (message) => showNotify(message, "error"),
     openHelp: () => setHelpOpen(true),
     openCheatsheet: () => useWorkspaceStore.getState().setCheatsheetOpen(true),
+    openPinnedSwitcher: () => useWorkspaceStore.getState().setPinnedSwitcherOpen(true),
     quit: () => {
       if (helpOpen) setHelpOpen(false);
       else if (inspectorOpen) setInspectorOpen(false);
@@ -277,7 +285,9 @@ export function WorkspaceBuffer() {
     share: handleShare,
     unshare: handleUnshare,
     updateSettings,
+    getSettings: () => settings,
     openSettings: () => router.push("/settings"),
+    goHome: () => router.push("/"),
     login: () => router.push("/login"),
     logout: () => {
       if (!syncEnabled) {
@@ -359,6 +369,7 @@ export function WorkspaceBuffer() {
                 onChange={handleChange}
                 onIntent={handleIntent}
                 onTagClick={handleTagClick}
+                onTitleRevealChange={setTitleRevealed}
               />
             </div>
             {cold && <BufferSkeleton />}

@@ -133,8 +133,14 @@
 
   /* Layout dimensions */
   --spacing-sidebar-width: 16rem;
+  --spacing-inspector-width: 18rem;
   --spacing-status-bar-height: 1.5rem;
   --spacing-header-height: 3.5rem;
+  /* The header's minimal state: inside a note buffer, while its own title
+     line (the H1) is still on screen and the header's title would just be
+     a duplicate. Dashboard/Settings never use this -- their header title is
+     the only place that label appears at all. */
+  --spacing-header-height-compact: 2.75rem;
   --spacing-buffer-tab-height: 2.25rem;
   --spacing-gutter-editor: 3.5rem;
 

@@ -3,8 +3,10 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { persistSettings } from "@/lib/save-settings";
+import { describeSettingsPatch } from "@/lib/format";
 import { useSignOut } from "@/lib/use-sign-out";
 import { useWorkspaceStore } from "@/lib/store";
+import { StatusToast } from "@/components/auth/StatusToast";
 import type { Settings } from "@/lib/schemas";
 
 const THEME_OPTIONS: { value: Settings["theme"]; label: string }[] = [
@@ -89,6 +91,7 @@ export function SettingsView({ email }: { email: string | null }) {
   const syncEnabled = useWorkspaceStore((s) => s.syncEnabled);
   const updateStore = useWorkspaceStore((s) => s.updateSettings);
   const [saved, setSaved] = useState(true);
+  const [notify, setNotify] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const signOut = useSignOut();
 
@@ -97,6 +100,11 @@ export function SettingsView({ email }: { email: string | null }) {
   // branch WorkspaceBuffer's :set command takes.
   const update = (patch: Partial<Settings>) => {
     updateStore(patch);
+    // Same confirmation text `:set` gives on the command line (describeSettingsPatch)
+    // -- a checkbox flipping is visible feedback on its own, but the toast makes every
+    // control (dropdown, number input, swatch) confirm consistently, matching `:set`.
+    setNotify(describeSettingsPatch(patch));
+    window.setTimeout(() => setNotify(null), 3000);
     const next = { ...settings, ...patch };
     if (!syncEnabled) {
       void persistSettings(next, false);
@@ -117,6 +125,8 @@ export function SettingsView({ email }: { email: string | null }) {
           {saved ? "[Saved]" : "[Saving...]"}
         </span>
       </div>
+
+      <StatusToast message={notify} />
 
       <section className="bg-surface-container-high">
         <div className="px-space-4 py-space-2 font-label-sm text-label-sm text-outline uppercase tracking-wider border-b border-outline-variant/30">
