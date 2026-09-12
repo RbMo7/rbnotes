@@ -62,6 +62,29 @@ export function rbnotesTheme(mode: "NORMAL" | "INSERT" | "VISUAL" | "EDIT" | "RO
       ".cm-scroller": {
         fontFamily: "var(--font-jetbrains-mono), JetBrains Mono, monospace",
         lineHeight: "1.75rem",
+        // A default macOS/overlay scrollbar only appears while actively
+        // scrolling, so a note whose content overflows the buffer looked
+        // identical to one that didn't -- nothing hinted there was more
+        // below. Styling it (Firefox via scrollbar-color, Chromium/Safari
+        // via the pseudo-elements below) forces the always-visible "classic"
+        // rendering instead, so overflow is visible at rest.
+        scrollbarWidth: "thin",
+        scrollbarColor: `${mix(colors.outline, 60)} transparent`,
+      },
+      ".cm-scroller::-webkit-scrollbar": {
+        width: "10px",
+        height: "10px",
+      },
+      ".cm-scroller::-webkit-scrollbar-track": {
+        backgroundColor: "transparent",
+      },
+      ".cm-scroller::-webkit-scrollbar-thumb": {
+        backgroundColor: mix(colors.outline, 60),
+        borderRadius: "9999px",
+        border: `2px solid ${colors.surfaceContainerLowest}`,
+      },
+      ".cm-scroller::-webkit-scrollbar-thumb:hover": {
+        backgroundColor: colors.outline,
       },
       "&.cm-focused": { outline: "none" },
       ".cm-line": { padding: "0 2px" },
@@ -112,6 +135,22 @@ export function rbnotesTheme(mode: "NORMAL" | "INSERT" | "VISUAL" | "EDIT" | "RO
       },
       ".cm-placeholder": {
         color: mix(colors.onSurfaceVariant, 40),
+      },
+      // The note's own title line (extensions.ts's titleLineHighlight marks
+      // line 1 with this class, only when it actually reads as a heading) --
+      // bigger and in the accent color, so it reads as unmistakably *the*
+      // title rather than just another `#` heading the doc happens to have.
+      // `!important`: the heading text's own span already carries an
+      // explicit font-size/color from rbnotesMarkdownHighlight's t.heading1
+      // rule (same element, generated class) -- a plain override here would
+      // lose to it depending on DOM nesting the syntax highlighter controls,
+      // not us; `!important` wins outright regardless of that nesting.
+      ".cm-title-line, .cm-title-line span": {
+        fontSize: "1.5rem !important",
+        lineHeight: "2rem !important",
+        fontWeight: "800 !important",
+        color: `${colors.primary} !important`,
+        letterSpacing: "-0.01em",
       },
       // The in-document look for a `#tag` (extensions.ts's tagPillDecorations
       // marks it with this class) -- a real pill, not just bold colored
@@ -180,6 +219,12 @@ export const rbnotesMarkdownHighlight = syntaxHighlighting(
     { tag: t.link, color: colors.primary, textDecoration: "underline" },
     { tag: t.url, color: colors.onSurfaceVariant },
     { tag: t.list, color: colors.primary },
+    // lezer-markdown tags OrderedList/BulletList AND everything inside them
+    // (marks + paragraph content) with tags.list -- without this override,
+    // list-item body text inherits the bullet's primary color instead of
+    // the normal text color. Must come after the t.list rule above so it
+    // wins for nodes carrying both tags.
+    { tag: t.content, color: colors.onSurface },
     { tag: t.quote, color: colors.onSurfaceVariant, fontStyle: "italic" },
     { tag: t.contentSeparator, color: colors.outlineVariant },
     { tag: t.meta, color: colors.outline },

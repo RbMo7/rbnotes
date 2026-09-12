@@ -3,18 +3,54 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COMMAND } from "@/components/editor/command-dispatch";
 
-type CommandChip = { label: string; full: string; danger?: boolean };
+type CommandChip = { label: string; full: string; desc: string; danger?: boolean };
 
+/**
+ * Every command, buffer-only ones included. The in-buffer dock shows all
+ * of these; the Dashboard's dock (AppShell, no note mounted) passes
+ * `DASHBOARD_COMMAND_CHIPS` instead so it doesn't offer `:w`/`:rename`/
+ * `:delete`/`:pin`/`:share`/`:unshare`/`:insp` -- commands that only ever
+ * report "no buffer" there.
+ */
 const COMMAND_CHIPS: CommandChip[] = [
-  { label: ":w", full: COMMAND.save },
-  { label: ":rename <title>", full: COMMAND.renamePrefix },
-  { label: ":new", full: COMMAND.newNote },
-  { label: ":wq", full: "wq" },
-  { label: ":delete", full: COMMAND.delete, danger: true },
-  { label: ":share", full: COMMAND.share },
-  { label: ":set rnu", full: "set rnu" },
-  { label: ":help", full: "help" },
+  { label: ":w", full: COMMAND.save, desc: "save" },
+  { label: ":wq", full: "wq", desc: "save & close" },
+  { label: ":q", full: "q", desc: "close" },
+  { label: ":new", full: COMMAND.newNote, desc: "new note" },
+  { label: ":rename <title>", full: COMMAND.renamePrefix, desc: "rename note" },
+  { label: ":pin", full: COMMAND.pin, desc: "toggle pin" },
+  { label: ":pins", full: "pins", desc: "pinned notes switcher" },
+  { label: ":delete", full: COMMAND.delete, desc: "delete note", danger: true },
+  { label: ":share", full: COMMAND.share, desc: "share link" },
+  { label: ":unshare", full: "unshare", desc: "revoke link" },
+  { label: ":set rnu", full: "set rnu", desc: "hybrid line #s" },
+  { label: ":set nu", full: "set nu", desc: "absolute line #s" },
+  { label: ":set wrap", full: "set wrap", desc: "word wrap" },
+  { label: ":b", full: "b", desc: "toggle sidebar" },
+  { label: ":home", full: "home", desc: "go to dashboard" },
+  { label: ":insp", full: "insp", desc: "toggle inspector" },
+  { label: ":help", full: "help", desc: "shortcuts help" },
+  { label: ":cheat", full: "cheat", desc: "cheatsheet" },
+  { label: ":login", full: "login", desc: "sign in" },
+  { label: ":logout", full: "logout", desc: "sign out" },
 ];
+
+const DASHBOARD_ONLY_FULLS = new Set([
+  COMMAND.newNote,
+  "pins",
+  "set rnu",
+  "set nu",
+  "set wrap",
+  "b",
+  "help",
+  "cheat",
+  "login",
+  "logout",
+]);
+
+export const DASHBOARD_COMMAND_CHIPS: CommandChip[] = COMMAND_CHIPS.filter((c) =>
+  DASHBOARD_ONLY_FULLS.has(c.full),
+);
 
 /**
  * The Stitch command-mode screen's bottom dock: a TAB-COMPLETE BUFFER chip
@@ -26,14 +62,18 @@ export function CommandDock({
   open,
   onClose,
   onSubmit,
+  commands = COMMAND_CHIPS,
 }: {
   open: boolean;
   onClose: () => void;
   onSubmit: (raw: string) => void;
+  /** Defaults to every command; pass `DASHBOARD_COMMAND_CHIPS` outside a buffer. */
+  commands?: CommandChip[];
 }) {
   const [value, setValue] = useState("");
   const [activeChip, setActiveChip] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -43,17 +83,34 @@ export function CommandDock({
       setValue("");
       setActiveChip(0);
       // Focus after the dock has actually mounted/painted.
-      requestAnimationFrame(() => inputRef.current?.focus());
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        // Neither `sticky bottom-0` (the in-buffer dock) nor plain document
+        // flow (the Dashboard's) guarantees the dock is already inside the
+        // visible scrollport the instant it mounts -- a short window, or a
+        // tall Dashboard note list already scrolled up, can leave the whole
+        // thing (grid and all) sitting above or below the fold with nothing
+        // visibly happening when `:` is pressed. Force it into view instead
+        // of hoping the existing scroll position already happens to show it.
+        dockRef.current?.scrollIntoView({ block: "end" });
+      });
     }
   }, [open]);
 
-  const firstWord = value.split(" ")[0] ?? "";
+  // Either direction of prefix match: covers both a bare command name still
+  // being typed ("se" -> every "set ..." chip) and a multi-word chip's own
+  // full text being outgrown by further typing ("set wrap" typed in full,
+  // longer than nothing left to prefix-match against). Matching only on
+  // the first word (the old approach) couldn't narrow "set wrap" down from
+  // "set rnu"/"set nu"/"set wrap" -- all three share the first word "set",
+  // so the fully-typed command never became the sole (and thus highlighted)
+  // match.
   const matches = useMemo(
     () =>
-      firstWord
-        ? COMMAND_CHIPS.filter((c) => c.full.startsWith(firstWord))
-        : COMMAND_CHIPS,
-    [firstWord],
+      value
+        ? commands.filter((c) => c.full.startsWith(value) || value.startsWith(c.full))
+        : commands,
+    [value, commands],
   );
 
   if (!open) return null;
@@ -79,7 +136,7 @@ export function CommandDock({
   };
 
   return (
-    <div className="sticky bottom-0 z-30 bg-surface-container-lowest shadow-2xl">
+    <div ref={dockRef} className="sticky bottom-0 z-30 bg-surface-container-lowest shadow-2xl">
       <div className="bg-surface-container-high px-space-4 py-space-2">
         <div className="flex items-center justify-between mb-space-1">
           <span className="text-label-sm font-label-sm text-outline uppercase tracking-wider">
@@ -89,8 +146,16 @@ export function CommandDock({
             {matches.length} matches
           </span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-space-2">
-          {COMMAND_CHIPS.map((chip, i) => {
+        {/* Capped and independently scrollable -- the chip list has grown
+            past what fits in a short viewport (adding :pins/:home pushed it
+            to 5 rows), and this block is `sticky bottom-0` with no scroll of
+            its own otherwise: on a short window the whole sticky block's
+            height can exceed the visible area, and since it's pinned by its
+            *bottom* edge, the grid above simply scrolls off above the top --
+            the command line still showed, just with no chips visible above
+            it. */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-space-2 max-h-40 overflow-y-auto">
+          {commands.map((chip) => {
             const isMatch = matches.includes(chip);
             const isActive = matches[activeChip] === chip;
             return (
@@ -112,10 +177,12 @@ export function CommandDock({
                       : "bg-surface-container/40 text-on-surface-variant/40"
                 }`}
               >
-                <span className={chip.danger && !isActive ? "text-error" : ""}>
+                <span className={chip.danger && isMatch && !isActive ? "text-error" : ""}>
                   {chip.label}
                 </span>
-                <span className="text-label-sm font-label-sm opacity-70">#{i + 1}</span>
+                <span className="text-label-sm font-label-sm opacity-70 truncate ml-space-2">
+                  {chip.desc}
+                </span>
               </button>
             );
           })}
@@ -129,7 +196,10 @@ export function CommandDock({
           <input
             ref={inputRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setActiveChip(0);
+            }}
             onKeyDown={handleKeyDown}
             onBlur={onClose}
             className="flex-1 min-w-0 bg-transparent text-on-surface outline-none border-none"

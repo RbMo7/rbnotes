@@ -2,29 +2,46 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMemo, useState } from "react";
-import { FileText, Archive, X } from "lucide-react";
+import { FileText, Archive, Pin, X } from "lucide-react";
 import { useWorkspaceStore } from "@/lib/store";
 import { displayFilename } from "@/lib/format";
 import { formatSidebarTimestamp } from "@/lib/grouping";
 import { useNotesQuery } from "@/lib/notes-query";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { RESPONSIVE_DIALOG_CONTENT } from "@/components/overlay/dialog-classes";
+import type { NoteRecord } from "@/lib/note-types";
+
+type SwitcherNote = Omit<NoteRecord, "updatedAt"> & { updatedAt: Date };
 
 /**
- * Ctrl+P. Per the design system spec: centered at 20% viewport height,
- * 38rem wide, bg-surface-container, 1px solid outline (#363D47-equivalent),
- * no shadow -- unlike every other overlay in this app, this one is
- * explicitly specified with zero elevation.
+ * The switcher body shared by Ctrl+P's "every note" QuickSwitcher and
+ * `:pins`/PinnedSwitcher's pinned-only one -- same list/search/keyboard-nav
+ * dialog, just parameterized over which notes it's given and its own copy.
+ * Per the design system spec: centered at 20% viewport height, 38rem wide,
+ * bg-surface-container, 1px solid outline (#363D47-equivalent), no shadow --
+ * unlike every other overlay in this app, this one is explicitly specified
+ * with zero elevation.
  */
-export function QuickSwitcher() {
-  const open = useWorkspaceStore((s) => s.quickSwitcherOpen);
-  const setOpen = useWorkspaceStore((s) => s.setQuickSwitcherOpen);
-  const { data: notes = [] } = useNotesQuery();
+function NoteSwitcherDialog({
+  open,
+  setOpen,
+  notes,
+  placeholder,
+  dialogTitle,
+  emptyLabel,
+}: {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  notes: NoteRecord[];
+  placeholder: string;
+  dialogTitle: string;
+  emptyLabel: string;
+}) {
   const { openNote: switchToNote } = useWorkspace();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const filtered = useMemo(() => {
+  const filtered = useMemo<SwitcherNote[]>(() => {
     const q = query.trim().toLowerCase();
     const list = q ? notes.filter((n) => n.title.toLowerCase().includes(q)) : notes;
     return list.slice(0, 20).map((n) => ({ ...n, updatedAt: new Date(n.updatedAt) }));
@@ -61,7 +78,7 @@ export function QuickSwitcher() {
             }
           }}
         >
-          <Dialog.Title className="sr-only">Quick switcher</Dialog.Title>
+          <Dialog.Title className="sr-only">{dialogTitle}</Dialog.Title>
           <div className="flex items-center gap-space-2 px-space-4 py-space-3 border-b border-outline-variant shrink-0">
             <span className="text-primary font-bold">&gt;</span>
             <input
@@ -71,13 +88,13 @@ export function QuickSwitcher() {
                 setQuery(e.target.value);
                 setActiveIndex(0);
               }}
-              placeholder="jump to note..."
+              placeholder={placeholder}
               className="flex-1 bg-transparent outline-none border-none text-on-surface placeholder-on-surface-variant/40"
-              aria-label="Search notes"
+              aria-label={dialogTitle}
             />
             <span className="w-2 h-4 bg-primary inline-block animate-pulse" />
             <Dialog.Close asChild>
-              <button aria-label="Close quick switcher" className="sm:hidden text-on-surface-variant hover:text-on-surface p-space-1 -mr-space-1">
+              <button aria-label={`Close ${dialogTitle.toLowerCase()}`} className="sm:hidden text-on-surface-variant hover:text-on-surface p-space-1 -mr-space-1">
                 <X size={18} strokeWidth={1.5} />
               </button>
             </Dialog.Close>
@@ -85,11 +102,11 @@ export function QuickSwitcher() {
           <div role="listbox" className="flex-1 sm:flex-none sm:max-h-80 overflow-y-auto py-space-2">
             {filtered.length === 0 && (
               <p className="px-space-4 py-space-2 font-body-sm text-body-sm text-outline/50">
-                ~ no matches
+                {emptyLabel}
               </p>
             )}
             {filtered.map((note, i) => {
-              const Icon = note.archived ? Archive : FileText;
+              const Icon = note.archived ? Archive : note.pinned ? Pin : FileText;
               return (
                 <button
                   key={note.id}
@@ -119,5 +136,42 @@ export function QuickSwitcher() {
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+/** Ctrl+P -- every note, most-recent first (whatever order useNotesQuery already returns). */
+export function QuickSwitcher() {
+  const open = useWorkspaceStore((s) => s.quickSwitcherOpen);
+  const setOpen = useWorkspaceStore((s) => s.setQuickSwitcherOpen);
+  const { data: notes = [] } = useNotesQuery();
+
+  return (
+    <NoteSwitcherDialog
+      open={open}
+      setOpen={setOpen}
+      notes={notes}
+      placeholder="jump to note..."
+      dialogTitle="Quick switcher"
+      emptyLabel="~ no matches"
+    />
+  );
+}
+
+/** `:pins` / Ctrl+Shift+P -- pinned notes only, same dialog otherwise. */
+export function PinnedSwitcher() {
+  const open = useWorkspaceStore((s) => s.pinnedSwitcherOpen);
+  const setOpen = useWorkspaceStore((s) => s.setPinnedSwitcherOpen);
+  const { data: notes = [] } = useNotesQuery();
+  const pinned = useMemo(() => notes.filter((n) => n.pinned), [notes]);
+
+  return (
+    <NoteSwitcherDialog
+      open={open}
+      setOpen={setOpen}
+      notes={pinned}
+      placeholder="jump to pinned note..."
+      dialogTitle="Pinned notes"
+      emptyLabel="~ no pinned notes -- :pin one first"
+    />
   );
 }

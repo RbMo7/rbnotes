@@ -55,6 +55,7 @@ export function WorkspaceProvider({
   const createNote = useCreateNote();
   const setActiveFilename = useWorkspaceStore((s) => s.setActiveFilename);
   const setActiveBufferInfo = useWorkspaceStore((s) => s.setActiveBufferInfo);
+  const setTitleRevealed = useWorkspaceStore((s) => s.setTitleRevealed);
   const queryClient = useQueryClient();
 
   // Fired once, right after first paint: warms every note's content in one
@@ -77,7 +78,8 @@ export function WorkspaceProvider({
     if (inNotesSection) return;
     setActiveFilename(null);
     setActiveBufferInfo(null);
-  }, [inNotesSection, setActiveFilename, setActiveBufferInfo]);
+    setTitleRevealed(true);
+  }, [inNotesSection, setActiveFilename, setActiveBufferInfo, setTitleRevealed]);
 
   const goHome = useCallback(() => {
     const home = notes ? mostRecentOpenNote(notes) : undefined;

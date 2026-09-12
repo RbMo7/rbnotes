@@ -1,11 +1,69 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 
 export type ShareViewer = { email: string; viewCount: number; lastViewedAt: string };
+
+const MIN_INSPECTOR_WIDTH = 240;
+const MAX_INSPECTOR_WIDTH = 480;
+const INSPECTOR_WIDTH_STORAGE_KEY = "rbnotes-inspector-width";
+const INSPECTOR_WIDTH_VAR = "--spacing-inspector-width";
+
+/**
+ * Drag-to-resize for the inspector -- the same trick as Sidebar's own
+ * useSidebarResize (writing straight to the shared @theme token that
+ * w-inspector-width reads, so there's no per-frame React re-render), mirrored
+ * for a panel that grows from the *right* edge inward: width is measured
+ * from the pointer to the viewport's right edge instead of to its left.
+ */
+function useInspectorResize() {
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(INSPECTOR_WIDTH_STORAGE_KEY);
+      if (saved) document.documentElement.style.setProperty(INSPECTOR_WIDTH_VAR, `${saved}px`);
+    } catch {
+      // Best-effort -- the default width from globals.css still applies.
+    }
+  }, []);
+
+  const draggingRef = useRef(false);
+
+  return useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
+    draggingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const onMove = (ev: PointerEvent) => {
+      if (!draggingRef.current) return;
+      const width = Math.min(
+        MAX_INSPECTOR_WIDTH,
+        Math.max(MIN_INSPECTOR_WIDTH, window.innerWidth - ev.clientX),
+      );
+      document.documentElement.style.setProperty(INSPECTOR_WIDTH_VAR, `${width}px`);
+    };
+    const onUp = () => {
+      draggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      const finalWidth = getComputedStyle(document.documentElement).getPropertyValue(
+        INSPECTOR_WIDTH_VAR,
+      );
+      try {
+        localStorage.setItem(INSPECTOR_WIDTH_STORAGE_KEY, String(parseFloat(finalWidth)));
+      } catch {
+        // Best-effort -- the width still applies for the rest of this session.
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, []);
+}
 
 function formatViewerTime(iso: string): string {
   const date = new Date(iso);
@@ -49,6 +107,7 @@ export function InspectorPanel({
   onCopy: () => void;
 }) {
   const isDesktop = useIsDesktop();
+  const onResizeStart = useInspectorResize();
 
   if (!open) return null;
 
@@ -149,7 +208,19 @@ export function InspectorPanel({
   if (isDesktop === false) return <MobileInspectorOverlay onClose={onClose}>{body}</MobileInspectorOverlay>;
 
   return (
-    <aside className="w-72 shrink-0 bg-surface-container-low border-l border-outline-variant/30 flex flex-col h-full overflow-y-auto">
+    <aside className="relative w-inspector-width shrink-0 bg-surface-container-low border-l border-outline-variant/30 flex flex-col h-full overflow-y-auto">
+      {/* Same wider-hit-zone-than-painted-line trick as Sidebar's own
+          resize handle -- on the panel's left edge instead of its right,
+          since the inspector grows leftward. */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize inspector"
+        onPointerDown={onResizeStart}
+        className="hidden lg:flex items-stretch justify-center absolute top-0 -left-1 bottom-0 w-3 cursor-col-resize group z-10"
+      >
+        <div className="w-px group-hover:w-0.5 bg-transparent group-hover:bg-primary/50 group-active:bg-primary transition-colors" />
+      </div>
       {body}
     </aside>
   );

@@ -2,16 +2,36 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
 import { TopBar } from "@/components/shell/TopBar";
 import { StatusBar } from "@/components/shell/StatusBar";
-import { QuickSwitcher } from "@/components/overlay/QuickSwitcher";
+import { StatusToast } from "@/components/auth/StatusToast";
+import { QuickSwitcher, PinnedSwitcher } from "@/components/overlay/QuickSwitcher";
 import { SearchPalette } from "@/components/overlay/SearchPalette";
 import { CheatsheetPopup } from "@/components/overlay/CheatsheetPopup";
+import { CommandDock, DASHBOARD_COMMAND_CHIPS } from "@/components/buffer/CommandDock";
+import { dispatchCommand, type CommandContext, type EditorOps } from "@/components/editor/command-dispatch";
 import { matchGlobalShortcut, dispatchIntent } from "@/components/editor/shortcuts";
 import { useIntentHandlers } from "@/components/editor/use-intent-handlers";
+import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useWorkspaceStore } from "@/lib/store";
+import { useSignOut } from "@/lib/use-sign-out";
+import { persistSettings } from "@/lib/save-settings";
 import { OnboardingOverlay } from "@/components/onboarding/OnboardingOverlay";
 import { hasSeenOnboarding, markOnboardingSeen } from "@/lib/onboarding";
+
+// A plain `:` keystroke (no modifier) has to be told apart from someone
+// typing a literal colon into a text field -- every other global shortcut
+// is ctrl/meta-modified, which a text input never produces on its own.
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.isContentEditable ||
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT"
+  );
+}
 
 /**
  * Covers first paint until `ready` (below) says the onboarding decision has
@@ -68,7 +88,14 @@ export function AppShell({
 }) {
   const collapsed = useWorkspaceStore((s) => s.sidebarCollapsed);
   const activeFilename = useWorkspaceStore((s) => s.activeFilename);
+  const titleRevealed = useWorkspaceStore((s) => s.titleRevealed);
   const setSidebarCollapsed = useWorkspaceStore((s) => s.setSidebarCollapsed);
+  // Kept in lockstep with TopBar's own `compact` (same inputs, modulo the
+  // one-frame-lagged `activeFilename` vs TopBar's zero-lag `activeNote` --
+  // fine here, since this only drives the content wrapper's padding-top
+  // catching up to the header's actual height, not anything that needs to
+  // be crisp).
+  const headerCompact = !!activeFilename && !titleRevealed;
   // Settings' "Replay tour" link flips this one directly -- the store is
   // the right home for that case (a cross-component trigger, unrelated to
   // first mount). The automatic first-run show below deliberately does NOT
@@ -76,6 +103,82 @@ export function AppShell({
   const storeOnboarding = useWorkspaceStore((s) => s.onboardingOpen);
   const setStoreOnboarding = useWorkspaceStore((s) => s.setOnboardingOpen);
   const handlers = useIntentHandlers();
+
+  // WorkspaceProvider mounts its own WorkspaceBuffer (and that buffer's own
+  // CommandDock) for exactly this route range -- rendering a second dock
+  // here too would double up on the one `commandDockOpen` flag they'd both
+  // be watching. Everywhere else (the Dashboard, tags, settings...) has no
+  // buffer of its own, which is the "`:` dosent work in dashboard page" bug:
+  // the shortcut could now fire there (see shortcuts.ts), but nothing was
+  // ever mounted to show it. This is that dock, wired to a note-less
+  // command context -- buffer-only commands (:w, :rename, :delete, :pin,
+  // :share/:unshare) just report there's no buffer, same as :pin already
+  // did inside a real buffer with nothing to pin.
+  const pathname = usePathname();
+  const router = useRouter();
+  const inNotesSection = pathname === "/notes" || pathname.startsWith("/notes/");
+  const { createAndOpenNote } = useWorkspace();
+  const commandDockOpen = useWorkspaceStore((s) => s.commandDockOpen);
+  const setCommandDockOpen = useWorkspaceStore((s) => s.setCommandDockOpen);
+  const syncEnabled = useWorkspaceStore((s) => s.syncEnabled);
+  const signOut = useSignOut();
+  const [notify, setNotify] = useState<string | null>(null);
+  const showNotify = useCallback((message: string) => {
+    setNotify(message);
+    window.setTimeout(() => setNotify(null), 3500);
+  }, []);
+
+  const handleGlobalCommandSubmit = useCallback(
+    (raw: string) => {
+      setCommandDockOpen(false);
+      const ops: EditorOps = {
+        replaceFirstH1: () => {},
+        execVimEx: () => false,
+      };
+      const noBuffer = (verb: string) => showNotify(`E486: no buffer to ${verb}`);
+      const ctx: CommandContext = {
+        note: {
+          save: async () => {
+            noBuffer("save");
+            return false;
+          },
+          isDirty: () => false,
+          create: createAndOpenNote,
+          rename: () => noBuffer("rename"),
+          delete: () => noBuffer("delete"),
+          togglePin: () => noBuffer("pin"),
+        },
+        workspace: {
+          notify: showNotify,
+          openHelp: () => showNotify("open a note first, then :help"),
+          openCheatsheet: () => useWorkspaceStore.getState().setCheatsheetOpen(true),
+          openPinnedSwitcher: () => useWorkspaceStore.getState().setPinnedSwitcherOpen(true),
+          quit: () => {},
+          toggleSidebar: handlers.toggleSidebar,
+          toggleInspector: () => noBuffer("inspect"),
+          share: () => noBuffer("share"),
+          unshare: () => noBuffer("unshare"),
+          updateSettings: (patch) => {
+            useWorkspaceStore.getState().updateSettings(patch);
+            void persistSettings(useWorkspaceStore.getState().settings, syncEnabled);
+          },
+          getSettings: () => useWorkspaceStore.getState().settings,
+          openSettings: () => router.push("/settings"),
+          goHome: () => router.push("/"),
+          login: () => router.push("/login"),
+          logout: () => {
+            if (!syncEnabled) {
+              showNotify("LOGOUT: already local only -- nothing to sign out of");
+              return;
+            }
+            signOut();
+          },
+        },
+      };
+      void dispatchCommand(raw, ops, ctx);
+    },
+    [createAndOpenNote, handlers, router, setCommandDockOpen, showNotify, signOut, syncEnabled],
+  );
 
   // First-run onboarding: plain LOCAL state (not the store), defaulting to
   // false so server-rendered HTML and the client's first render agree, same
@@ -109,10 +212,14 @@ export function AppShell({
   // The shell's adapter over the one shortcut table: when focus is inside
   // the editor, Editor.tsx's capture-phase listener handles the chord first
   // and stops it from reaching here. Outside the editor, this is where the
-  // same table gets its turn. `null` mode means "no editor focus", so
-  // mode-gated chords (the ':') never fire here.
+  // same table gets its turn. `null` mode means "no editor focus", so a
+  // mode-gated chord like ':' is now allowed through here too (see
+  // shortcuts.ts) -- guarded by isEditableTarget so it doesn't hijack a
+  // literal colon typed into some other text field (rename dialog, search
+  // box, settings input...).
   const handleIntent = useCallback(
     (event: KeyboardEvent) => {
+      if (isEditableTarget(event.target)) return;
       const intent = matchGlobalShortcut(event, null);
       if (!intent) return;
       event.preventDefault();
@@ -131,12 +238,34 @@ export function AppShell({
       <TopBar email={email} />
       <div
         data-collapsed={collapsed}
-        className="pl-0 lg:data-[collapsed=false]:pl-sidebar-width transition-[padding] duration-150 pt-header-height pb-status-bar-height h-dvh overflow-y-auto bg-surface"
+        className={`pl-0 lg:data-[collapsed=false]:pl-sidebar-width transition-[padding] duration-150 pb-status-bar-height h-dvh overflow-y-auto bg-surface flex flex-col ${headerCompact ? "pt-header-height-compact" : "pt-header-height"}`}
       >
-        {children}
+        <div className="flex-1 min-h-0">{children}</div>
+        {/* Same sticky-bottom-of-scroll-container trick the in-buffer dock
+            relies on (see CommandDock's own "sticky bottom-0") -- nesting it
+            inside this padded, sidebar-aware wrapper (rather than a
+            viewport-`fixed` element, which ignored the sidebar's width and
+            rendered underneath/clipped by it) means it never has to redo the
+            sidebar-offset math the wrapper above already does. */}
+        {!inNotesSection && commandDockOpen && (
+          <>
+            <CommandDock
+              open={commandDockOpen}
+              onClose={() => setCommandDockOpen(false)}
+              onSubmit={handleGlobalCommandSubmit}
+              commands={DASHBOARD_COMMAND_CHIPS}
+            />
+            {notify && (
+              <div className="px-space-4 bg-surface-container-lowest sticky bottom-0">
+                <StatusToast message={notify} tone="error" />
+              </div>
+            )}
+          </>
+        )}
       </div>
       <StatusBar filename={activeFilename} />
       <QuickSwitcher />
+      <PinnedSwitcher />
       <SearchPalette />
       <CheatsheetPopup />
       {showOnboarding && <OnboardingOverlay onFinish={finishOnboarding} />}

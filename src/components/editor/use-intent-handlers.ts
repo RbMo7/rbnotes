@@ -20,6 +20,7 @@ export function useIntentHandlers(): IntentHandlers {
   const toggleSidebar = useWorkspaceStore((s) => s.toggleSidebar);
   const setSidebarCollapsed = useWorkspaceStore((s) => s.setSidebarCollapsed);
   const setQuickSwitcherOpen = useWorkspaceStore((s) => s.setQuickSwitcherOpen);
+  const setPinnedSwitcherOpen = useWorkspaceStore((s) => s.setPinnedSwitcherOpen);
   const setSearchOpen = useWorkspaceStore((s) => s.setSearchOpen);
   const setCommandDockOpen = useWorkspaceStore((s) => s.setCommandDockOpen);
   const requestFocusTags = useWorkspaceStore((s) => s.requestFocusTags);
@@ -31,6 +32,7 @@ export function useIntentHandlers(): IntentHandlers {
       save: () => useWorkspaceStore.getState().saveActive?.(),
       newNote: createAndOpenNote,
       openQuickSwitcher: () => setQuickSwitcherOpen(true),
+      openPinnedSwitcher: () => setPinnedSwitcherOpen(true),
       openSearch: () => setSearchOpen(true),
       toggleSidebar: () => {
         // On mobile there's no sidebar to toggle -- its browse role lives
@@ -56,6 +58,7 @@ export function useIntentHandlers(): IntentHandlers {
       toggleSidebar,
       setSidebarCollapsed,
       setQuickSwitcherOpen,
+      setPinnedSwitcherOpen,
       setSearchOpen,
       setCommandDockOpen,
       requestFocusTags,
