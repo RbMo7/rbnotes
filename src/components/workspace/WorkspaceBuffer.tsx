@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { VimStatuslineDock } from "@/components/buffer/VimStatuslineDock";
 import { QuickActionsStrip } from "@/components/buffer/QuickActionsStrip";
@@ -25,10 +26,10 @@ import { useIntentHandlers } from "@/components/editor/use-intent-handlers";
 import { useAutosave } from "@/components/workspace/useAutosave";
 import { useNoteOperations } from "@/components/buffer/use-note-operations";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
-import { useWorkspaceStore } from "@/lib/store";
+import { useWorkspaceStore, isNoteDirty } from "@/lib/store";
 import { useIsDesktop } from "@/lib/use-is-desktop";
 import { displayFilename, formatWordCount, shortHash } from "@/lib/format";
-import { useNotesQuery, useNotesMutations, useTogglePin } from "@/lib/notes-query";
+import { useNotesQuery, useNotesMutations, useTogglePin, warmAllNotes } from "@/lib/notes-query";
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
 import { persistSettings } from "@/lib/save-settings";
 import { useSignOut } from "@/lib/use-sign-out";
@@ -122,6 +123,27 @@ export function WorkspaceBuffer() {
     });
     return () => setActiveBufferInfo(null);
   }, [note?.content, note?.createdAt, setActiveBufferInfo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // warmAllNotes (WorkspaceProvider) fires exactly once per mount and never
+  // retries -- if that single pass missed this note (a transient fetch
+  // failure, or the note's updatedAt raced the batch and got skipped by the
+  // stale-never-clobbers guard), it stays cold for the rest of the session
+  // with nothing else to warm it, stuck on the skeleton until a full reload
+  // remounts WorkspaceProvider. Opening a still-cold note retries the same
+  // batch warm once, on the assumption whatever caused the race has settled.
+  const queryClient = useQueryClient();
+  const currentUserId = useWorkspaceStore((s) => s.currentUserId);
+  useEffect(() => {
+    if (!note || note.content !== undefined) return;
+    let cancelled = false;
+    const id = window.setTimeout(() => {
+      if (!cancelled) void warmAllNotes(queryClient, currentUserId, isNoteDirty);
+    }, 1200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
+  }, [note?.id, note?.content, queryClient, currentUserId]);
 
   // A global-search result click stashes {noteId, query} in the store right
   // before switching (see SearchPalette.tsx); read-and-clear it once per
