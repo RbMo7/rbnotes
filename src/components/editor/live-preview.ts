@@ -276,6 +276,17 @@ function linkClickHandler(field: StateField<PreviewState>): Extension {
       if (pos == null) return false;
       const hit = findLinkAt(view.state.field(field).links, pos);
       if (!hit || !isSafeLinkScheme(hit.url)) return false;
+      // posAtCoords clamps to the nearest character, so a click past the end
+      // of a line whose last content is a link resolves to the link's own
+      // end position -- e.g. clicking empty space after "[foo](url)" on an
+      // otherwise-blank rest of the line still "hits" pos === hit.to. Reject
+      // unless the click's actual x-coordinate falls within the link's
+      // rendered span, so only the link text itself is clickable.
+      const left = view.coordsAtPos(hit.from, 1)?.left;
+      const right = view.coordsAtPos(hit.to, -1)?.right;
+      if (left == null || right == null || event.clientX < left || event.clientX > right) {
+        return false;
+      }
       event.preventDefault();
       window.open(hit.url, "_blank", "noopener,noreferrer");
       return true;

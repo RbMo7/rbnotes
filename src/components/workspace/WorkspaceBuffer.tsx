@@ -381,7 +381,25 @@ export function WorkspaceBuffer() {
             {helpOpen && <HelpBuffer onClose={() => setHelpOpen(false)} />}
           </div>
 
-          <div className="px-space-4 sm:px-space-8 pb-space-4 shrink-0">
+          <div className="relative px-space-4 sm:px-space-8 pb-space-4 shrink-0">
+            {notify && (
+              // A real floating overlay (absolute + high z-index), pinned to
+              // the top edge of this footer strip -- i.e. right above the
+              // command-line hint row (VimStatuslineDock) -- rather than an
+              // inline flow element, which previously let it render *inside*
+              // HelpBuffer's own visible area (HelpBuffer is an absolute
+              // inset-0 z-20 sibling of the editor, one flex item up) instead
+              // of floating above it like a toast should. A command result
+              // (":cheat" typo'd, etc.) needs to be visible no matter what
+              // overlay is currently open, so this sits above both HelpBuffer
+              // (z-20) and Radix dialog overlays (z-60) alike.
+              <div className="absolute inset-x-4 sm:inset-x-8 bottom-full mb-space-2 z-[70] flex justify-center pointer-events-none">
+                <div className="w-full max-w-2xl pointer-events-auto">
+                  <StatusToast message={notify} tone={notifyTone} />
+                </div>
+              </div>
+            )}
+
             {vimEnabled ? (
               <VimStatuslineDock onSave={() => void write()} />
             ) : (
@@ -393,23 +411,6 @@ export function WorkspaceBuffer() {
             )}
 
           </div>
-
-          {notify && (
-            // A real floating overlay (fixed + high z-index), not an inline
-            // flow element -- it previously sat in normal document flow
-            // inside this shrink-0 footer strip, which let it render *inside*
-            // HelpBuffer's own visible area (HelpBuffer is an absolute
-            // inset-0 z-20 sibling of the editor, one flex item up) instead
-            // of floating above it like a toast should. A command result
-            // (":cheat" typo'd, etc.) needs to be visible no matter what
-            // overlay is currently open, so this sits above both HelpBuffer
-            // (z-20) and Radix dialog overlays (z-60) alike.
-            <div className="fixed inset-x-4 sm:inset-x-8 bottom-[calc(var(--spacing-status-bar-height)+1rem)] z-[70] flex justify-center pointer-events-none">
-              <div className="w-full max-w-2xl pointer-events-auto">
-                <StatusToast message={notify} tone={notifyTone} />
-              </div>
-            </div>
-          )}
         </div>
 
         {vimEnabled ? (
