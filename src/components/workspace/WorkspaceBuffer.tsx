@@ -59,6 +59,7 @@ export function WorkspaceBuffer() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [notify, setNotify] = useState<string | null>(null);
   const [notifyTone, setNotifyTone] = useState<"info" | "error">("info");
+  const [notifyUndo, setNotifyUndo] = useState<(() => void) | null>(null);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [shareViewers, setShareViewers] = useState<ShareViewer[]>([]);
   const [shareLoading, setShareLoading] = useState(false);
@@ -212,14 +213,22 @@ export function WorkspaceBuffer() {
     [isDesktop, goHome],
   );
 
-  const showNotify = useCallback((message: string, tone: "info" | "error" = "info") => {
+  const showNotify = useCallback((message: string, tone: "info" | "error" = "info", undo?: () => void) => {
     setNotify(message);
     setNotifyTone(tone);
-    window.setTimeout(() => setNotify(null), 3500);
+    // An undoable action gets more time on screen than a plain status line --
+    // it's a decision the user needs a real chance to reverse, not a
+    // fire-and-forget confirmation.
+    setNotifyUndo(() => undo ?? null);
+    window.setTimeout(() => {
+      setNotify(null);
+      setNotifyUndo(null);
+    }, undo ? 6000 : 3500);
   }, []);
 
   const noteOps = useNoteOperations({
     noteId: activeNoteId ?? "",
+    noteTitle: note?.title ?? "",
     getContent,
     notify: showNotify,
     cancelAutosave: cancel,
@@ -417,7 +426,19 @@ export function WorkspaceBuffer() {
               // (z-20) and Radix dialog overlays (z-60) alike.
               <div className="absolute inset-x-4 sm:inset-x-8 bottom-full mb-space-2 z-[70] flex justify-center pointer-events-none">
                 <div className="w-full max-w-2xl pointer-events-auto">
-                  <StatusToast message={notify} tone={notifyTone} />
+                  <StatusToast
+                    message={notify}
+                    tone={notifyTone}
+                    onUndo={
+                      notifyUndo
+                        ? () => {
+                            notifyUndo();
+                            setNotify(null);
+                            setNotifyUndo(null);
+                          }
+                        : undefined
+                    }
+                  />
                 </div>
               </div>
             )}

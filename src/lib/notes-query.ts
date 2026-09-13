@@ -66,22 +66,43 @@ export function useLocalNotesQuery(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    void (async () => {
-      const local = await listNotes();
-      if (cancelled) return;
-      queryClient.setQueryData<NoteRecord[]>(
-        notesQueryKey,
-        local.map((n) => ({
-          id: n.id,
-          title: n.title,
-          content: n.content,
-          pinned: n.pinned,
-          archived: n.archived,
-          createdAt: n.createdAt,
-          updatedAt: n.editedAt,
-        })),
-      );
-    })();
+    let retried = false;
+
+    const seed = () => {
+      void (async () => {
+        try {
+          const local = await listNotes();
+          if (cancelled) return;
+          queryClient.setQueryData<NoteRecord[]>(
+            notesQueryKey,
+            local.map((n) => ({
+              id: n.id,
+              title: n.title,
+              content: n.content,
+              pinned: n.pinned,
+              archived: n.archived,
+              createdAt: n.createdAt,
+              updatedAt: n.editedAt,
+            })),
+          );
+        } catch {
+          // An anonymous session has no server fallback -- this is the
+          // ONLY source of its notes (useNotesQuery is `enabled: false`
+          // here). Left unguarded, a failed IndexedDB read (blocked,
+          // private-browsing, quota) leaves the whole notes list stuck
+          // empty for the rest of the session with nothing else to ever
+          // seed it, same failure shape warmAllNotes had for content.
+          // One retry, since this is almost always transient (IndexedDB
+          // not ready yet on first paint).
+          if (!cancelled && !retried) {
+            retried = true;
+            window.setTimeout(seed, 1000);
+          }
+        }
+      })();
+    };
+    seed();
+
     return () => {
       cancelled = true;
     };

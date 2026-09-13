@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   setNoteFlagsAction: vi.fn(async () => {}),
   deleteNoteAction: vi.fn(async () => {}),
   goHome: vi.fn(),
+  openNote: vi.fn(),
   createAndOpenNote: vi.fn(),
   getLocalNote: vi.fn(),
   setLocalNote: vi.fn(async () => {}),
@@ -33,7 +34,7 @@ vi.mock("@/lib/local-notes-store", () => ({
 vi.mock("@/components/workspace/WorkspaceContext", () => ({
   useWorkspace: () => ({
     activeNoteId: note.id,
-    openNote: vi.fn(),
+    openNote: mocks.openNote,
     goHome: mocks.goHome,
     createAndOpenNote: mocks.createAndOpenNote,
   }),
@@ -64,6 +65,7 @@ function setup(content: string) {
     () =>
       useNoteOperations({
         noteId: note.id,
+        noteTitle: note.title,
         getContent: () => content,
         notify,
         cancelAutosave: mocks.cancelAutosave,
@@ -79,6 +81,7 @@ describe("useNoteOperations", () => {
     mocks.setNoteFlagsAction.mockClear();
     mocks.deleteNoteAction.mockClear();
     mocks.goHome.mockClear();
+    mocks.openNote.mockClear();
     mocks.createAndOpenNote.mockClear();
     mocks.getLocalNote.mockReset().mockResolvedValue(undefined);
     mocks.setLocalNote.mockClear();
@@ -108,6 +111,26 @@ describe("useNoteOperations", () => {
     expect(mocks.setNoteFlagsAction).toHaveBeenCalledWith({ noteId: note.id, archived: true });
     expect(mocks.deleteNoteAction).not.toHaveBeenCalled();
     expect(mocks.goHome).toHaveBeenCalledOnce();
+  });
+
+  it("archiving offers an Undo that unarchives and reopens the note", () => {
+    const { result, queryClient, notify } = setup("# Title\n\nsome body");
+
+    act(() => {
+      result.current.delete(false);
+    });
+
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("archived"), "info", expect.any(Function));
+    const undo = notify.mock.calls[0][2] as () => void;
+
+    act(() => {
+      undo();
+    });
+
+    const cached = queryClient.getQueryData<NoteRecord[]>(notesQueryKey);
+    expect(cached?.[0].archived).toBe(false);
+    expect(mocks.setNoteFlagsAction).toHaveBeenLastCalledWith({ noteId: note.id, archived: false });
+    expect(mocks.openNote).toHaveBeenCalledWith(note.id);
   });
 
   it("really deletes an empty buffer instead of archiving it", () => {

@@ -26,18 +26,20 @@ import { resolveDeleteMode, type NoteOps } from "@/components/editor/command-dis
  */
 export function useNoteOperations({
   noteId,
+  noteTitle,
   getContent,
   notify,
   cancelAutosave,
 }: {
   noteId: string;
+  noteTitle: string;
   getContent: () => string;
-  notify: (message: string) => void;
+  notify: (message: string, tone?: "info" | "error", undo?: () => void) => void;
   /** useAutosave's cancel(noteId) -- stops a pending save from resurrecting a just-deleted note. */
   cancelAutosave: (noteId: string) => void;
 }): Pick<NoteOps, "create" | "rename" | "delete"> {
   const { updateNote, removeNote } = useNotesMutations();
-  const { createAndOpenNote, goHome } = useWorkspace();
+  const { createAndOpenNote, goHome, openNote } = useWorkspace();
 
   const rename = useCallback(
     (newTitle: string) => {
@@ -100,6 +102,7 @@ export function useNoteOperations({
           }
         })();
         if (syncEnabled) deleteNoteAction({ noteId }).catch(() => {});
+        notify(`DELETE: "${displayFilename(noteTitle)}" removed permanently  [OK]`);
       } else {
         updateNote(noteId, { archived: true });
         void (async () => {
@@ -107,10 +110,27 @@ export function useNoteOperations({
           if (existing) await setLocalNote({ ...existing, archived: true, editedAt: now });
         })();
         if (syncEnabled) setNoteFlagsAction({ noteId, archived: true }).catch(() => {});
+
+        // Archiving is the reversible branch (the note and its content are
+        // untouched, just flagged) -- unlike purge, worth a real Undo, not
+        // just a status line. Flips the flag back and reopens the buffer,
+        // mirroring exactly what archiving itself just did in reverse.
+        const undoArchive = () => {
+          updateNote(noteId, { archived: false });
+          void (async () => {
+            const existing = await getLocalNote(noteId);
+            if (existing) {
+              await setLocalNote({ ...existing, archived: false, editedAt: new Date().toISOString() });
+            }
+          })();
+          if (syncEnabled) setNoteFlagsAction({ noteId, archived: false }).catch(() => {});
+          openNote(noteId);
+        };
+        notify(`ARCHIVE: "${displayFilename(noteTitle)}" archived`, "info", undoArchive);
       }
       goHome();
     },
-    [noteId, getContent, removeNote, updateNote, goHome, cancelAutosave],
+    [noteId, noteTitle, getContent, removeNote, updateNote, goHome, openNote, notify, cancelAutosave],
   );
 
   return useMemo(

@@ -7,9 +7,12 @@
 export function StatusToast({
   message,
   tone = "info",
+  onUndo,
 }: {
   message: string | null;
   tone?: "info" | "error";
+  /** An action worth reversing (e.g. archiving a note) -- renders an Undo button in place of the [OK]/[ERR] tag. */
+  onUndo?: () => void;
 }) {
   return (
     <div
@@ -25,9 +28,18 @@ export function StatusToast({
         </span>
         <span>{message ?? "Ready"}</span>
       </div>
-      <span className={tone === "error" ? "text-error font-code-editor" : "text-on-surface-variant font-code-editor"}>
-        {tone === "error" ? "[ERR]" : "[OK]"}
-      </span>
+      {onUndo ? (
+        <button
+          onClick={onUndo}
+          className="px-space-2 py-space-0 bg-primary/10 text-primary hover:bg-primary/20 rounded font-medium"
+        >
+          Undo
+        </button>
+      ) : (
+        <span className={tone === "error" ? "text-error font-code-editor" : "text-on-surface-variant font-code-editor"}>
+          {tone === "error" ? "[ERR]" : "[OK]"}
+        </span>
+      )}
     </div>
   );
 }

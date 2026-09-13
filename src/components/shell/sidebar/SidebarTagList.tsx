@@ -72,7 +72,15 @@ export function SidebarTagList({
       })}
       {tags.length === 0 && (
         <p className="px-space-2 py-space-4 text-center font-body-sm text-body-sm text-outline/50">
-          {query ? "~ no matches" : "~ no tags yet"}
+          {query ? (
+            "~ no matches"
+          ) : (
+            <>
+              ~ no tags yet
+              <br />
+              write <span className="text-primary">#like-this</span> anywhere in a note
+            </>
+          )}
         </p>
       )}
     </div>
