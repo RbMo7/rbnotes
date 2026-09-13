@@ -51,9 +51,8 @@ describe("Dashboard", () => {
     render(<Dashboard email="a@b.com" />);
 
     // SidebarLists' buffer tab, folded into the Dashboard route on mobile.
-    // The fixture note is months old, so it lands in EARLIER, which -- like
-    // every non-TODAY group -- starts collapsed; open it first.
-    fireEvent.click(screen.getByText("EARLIER"));
+    // The fixture note is months old, so it lands in EARLIER -- the only
+    // group present, and "at least one group open" auto-opens it.
     expect(screen.getByText("shipping-plan.md")).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Tags" })).toBeTruthy();
   });

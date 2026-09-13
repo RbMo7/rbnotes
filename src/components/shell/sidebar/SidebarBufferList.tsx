@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { groupNotes, type NoteGroup } from "@/lib/grouping";
 import { NoteListItem } from "@/components/shell/NoteListItem";
@@ -22,6 +22,21 @@ export function SidebarBufferList({ notes, filter }: { notes: NoteRecord[]; filt
   const query = filter.startsWith("/") ? "" : filter.trim().toLowerCase();
   const visible = query ? notes.filter((n) => n.title.toLowerCase().includes(query)) : notes;
   const groups = groupNotes(visible.map((n) => ({ ...n, updatedAt: new Date(n.updatedAt) })));
+  const groupLabels = groups.map((g) => g.label).join(",");
+
+  // TODAY starting open assumes TODAY has notes -- if it doesn't (nothing
+  // edited yet today), that default leaves every accordion collapsed and a
+  // returning user has to click before they can reach any note at all. At
+  // least one group -- whichever is first/most-recent among the ones that
+  // actually have notes -- should always be open.
+  useEffect(() => {
+    if (groups.length === 0) return;
+    setOpenGroups((prev) => {
+      if (groups.some((g) => prev[g.label])) return prev;
+      return { ...prev, [groups[0].label]: true };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- groupLabels is the stable proxy for "which groups exist"
+  }, [groupLabels]);
 
   function toggleGroup(label: NoteGroup["label"]) {
     setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
