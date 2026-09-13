@@ -9,7 +9,7 @@ import { useWorkspaceStore } from "@/lib/store";
 const mocks = vi.hoisted(() => ({
   setNoteFlagsAction: vi.fn(async () => {}),
   deleteNoteAction: vi.fn(async () => {}),
-  goHome: vi.fn(),
+  routerPush: vi.fn(),
   openNote: vi.fn(),
   createAndOpenNote: vi.fn(),
   getLocalNote: vi.fn(),
@@ -31,11 +31,14 @@ vi.mock("@/lib/local-notes-store", () => ({
   purgeNote: mocks.purgeLocalNote,
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mocks.routerPush }),
+}));
+
 vi.mock("@/components/workspace/WorkspaceContext", () => ({
   useWorkspace: () => ({
     activeNoteId: note.id,
     openNote: mocks.openNote,
-    goHome: mocks.goHome,
     createAndOpenNote: mocks.createAndOpenNote,
   }),
 }));
@@ -80,7 +83,7 @@ describe("useNoteOperations", () => {
   beforeEach(() => {
     mocks.setNoteFlagsAction.mockClear();
     mocks.deleteNoteAction.mockClear();
-    mocks.goHome.mockClear();
+    mocks.routerPush.mockClear();
     mocks.openNote.mockClear();
     mocks.createAndOpenNote.mockClear();
     mocks.getLocalNote.mockReset().mockResolvedValue(undefined);
@@ -110,7 +113,7 @@ describe("useNoteOperations", () => {
     expect(cached?.[0].archived).toBe(true);
     expect(mocks.setNoteFlagsAction).toHaveBeenCalledWith({ noteId: note.id, archived: true });
     expect(mocks.deleteNoteAction).not.toHaveBeenCalled();
-    expect(mocks.goHome).toHaveBeenCalledOnce();
+    expect(mocks.routerPush).toHaveBeenCalledWith("/");
   });
 
   it("archiving offers an Undo that unarchives and reopens the note", () => {

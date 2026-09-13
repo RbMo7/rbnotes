@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useNotesMutations } from "@/lib/notes-query";
 import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import { useWorkspaceStore } from "@/lib/store";
@@ -40,7 +41,8 @@ export function useNoteOperations({
   cancelAutosave: (noteId: string) => void;
 }): Pick<NoteOps, "create" | "rename" | "delete"> {
   const { updateNote, removeNote } = useNotesMutations();
-  const { createAndOpenNote, goHome, openNote } = useWorkspace();
+  const { createAndOpenNote, openNote } = useWorkspace();
+  const router = useRouter();
 
   const rename = useCallback(
     (newTitle: string) => {
@@ -129,9 +131,18 @@ export function useNoteOperations({
         };
         notify(`ARCHIVE: "${displayFilename(noteTitle)}" archived`, "info", undoArchive);
       }
-      goHome();
+      // Straight to the Dashboard, not WorkspaceContext's goHome (which
+      // reopens the most-recently-updated note) -- landing back on
+      // *another* note right after deleting/archiving this one reads as
+      // "did that even work?", and there was a real bug here: goHome's
+      // notes snapshot can be one render behind this exact mutation and
+      // resolve right back to the note just removed, producing "E484: no
+      // such buffer" (see WorkspaceProvider.tsx's goHome for that fix
+      // regardless -- this callsite just doesn't need it in the first
+      // place).
+      router.push("/");
     },
-    [noteId, noteTitle, getContent, removeNote, updateNote, goHome, openNote, notify, cancelAutosave],
+    [noteId, noteTitle, getContent, removeNote, updateNote, router, openNote, notify, cancelAutosave],
   );
 
   return useMemo(

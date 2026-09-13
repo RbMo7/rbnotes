@@ -11,7 +11,7 @@ import {
   useCreateNote,
   warmAllNotes,
 } from "@/lib/notes-query";
-import type { NoteRecord } from "@/lib/note-types";
+import { notesQueryKey, type NoteRecord } from "@/lib/note-types";
 import { useWorkspaceStore, isNoteDirty } from "@/lib/store";
 import { WorkspaceContextProvider, type WorkspaceApi } from "@/components/workspace/WorkspaceContext";
 import { WorkspaceBuffer } from "@/components/workspace/WorkspaceBuffer";
@@ -47,7 +47,10 @@ export function WorkspaceProvider({
   const router = useRouter();
   const inNotesSection = pathname === "/notes" || pathname.startsWith("/notes/");
 
-  const { data: notes } = useNotesQuery();
+  // Data itself unused here now -- goHome reads the cache live via
+  // queryClient instead (see below) -- but the call stays to keep this
+  // the mount point that kicks off the fetch.
+  useNotesQuery();
   const currentUserId = useWorkspaceStore((s) => s.currentUserId);
   useLocalNotesQuery(!email);
   const migrationProgress = useMigrateLocalNotes(email, currentUserId);
@@ -82,10 +85,18 @@ export function WorkspaceProvider({
   }, [inNotesSection, setActiveFilename, setActiveBufferInfo, setTitleRevealed]);
 
   const goHome = useCallback(() => {
-    const home = notes ? mostRecentOpenNote(notes) : undefined;
+    // Reads the cache directly rather than closing over the `notes` from
+    // this render: a caller that just mutated the cache (removeNote,
+    // archiving) and calls goHome() synchronously right after gets the
+    // stale pre-mutation snapshot from `notes` -- React hasn't re-rendered
+    // yet -- which could resolve back to the very note that was just
+    // deleted/archived and reopen it, landing on "E484: no such buffer"
+    // instead of actually going anywhere.
+    const live = queryClient.getQueryData<NoteRecord[]>(notesQueryKey);
+    const home = live ? mostRecentOpenNote(live) : undefined;
     if (home) open(home.id);
     else router.replace("/");
-  }, [notes, open, router]);
+  }, [queryClient, open, router]);
 
   const createAndOpenNote = useCallback(() => {
     const id = createNote();
