@@ -250,8 +250,9 @@ export function WorkspaceBuffer() {
         setShareToken(info.share?.token ?? null);
         setShareViewers(info.viewers);
       })
+      .catch(() => showNotify("SHARE: couldn't load sharing info", "error"))
       .finally(() => setShareLoading(false));
-  }, [activeNoteId, syncEnabled]);
+  }, [activeNoteId, syncEnabled, showNotify]);
 
   useEffect(() => {
     // Fetches and sets share info fresh each time the inspector opens.

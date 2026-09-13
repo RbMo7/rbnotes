@@ -13,6 +13,7 @@ import {
   purgeNote as purgeLocalNote,
 } from "@/lib/local-notes-store";
 import { resolveDeleteMode, type NoteOps } from "@/components/editor/command-dispatch";
+import { retryFireAndForget } from "@/lib/retry-fire-and-forget";
 
 /**
  * The note-mutating operations the command layer drives, with the
@@ -101,7 +102,7 @@ export function useNoteOperations({
             await tombstoneLocalNote(noteId, now);
           }
         })();
-        if (syncEnabled) deleteNoteAction({ noteId }).catch(() => {});
+        if (syncEnabled) void retryFireAndForget(() => deleteNoteAction({ noteId }));
         notify(`DELETE: "${displayFilename(noteTitle)}" removed permanently  [OK]`);
       } else {
         updateNote(noteId, { archived: true });
@@ -109,7 +110,7 @@ export function useNoteOperations({
           const existing = await getLocalNote(noteId);
           if (existing) await setLocalNote({ ...existing, archived: true, editedAt: now });
         })();
-        if (syncEnabled) setNoteFlagsAction({ noteId, archived: true }).catch(() => {});
+        if (syncEnabled) void retryFireAndForget(() => setNoteFlagsAction({ noteId, archived: true }));
 
         // Archiving is the reversible branch (the note and its content are
         // untouched, just flagged) -- unlike purge, worth a real Undo, not
@@ -123,7 +124,7 @@ export function useNoteOperations({
               await setLocalNote({ ...existing, archived: false, editedAt: new Date().toISOString() });
             }
           })();
-          if (syncEnabled) setNoteFlagsAction({ noteId, archived: false }).catch(() => {});
+          if (syncEnabled) void retryFireAndForget(() => setNoteFlagsAction({ noteId, archived: false }));
           openNote(noteId);
         };
         notify(`ARCHIVE: "${displayFilename(noteTitle)}" archived`, "info", undoArchive);

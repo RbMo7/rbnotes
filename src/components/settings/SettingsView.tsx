@@ -119,8 +119,7 @@ export function SettingsView({ email }: { email: string | null }) {
 
   return (
     <div className="w-full max-w-2xl px-space-4 sm:px-space-8 py-space-6 flex flex-col gap-space-6">
-      <div className="flex items-center justify-between">
-        <h1 className="font-headline-md text-headline-md text-primary font-semibold"># settings</h1>
+      <div className="flex items-center justify-end">
         <span className="font-label-sm text-label-sm text-outline">
           {saved ? "[Saved]" : "[Saving...]"}
         </span>

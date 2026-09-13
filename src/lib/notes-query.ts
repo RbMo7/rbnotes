@@ -10,6 +10,7 @@ import {
 } from "@/server/actions/notes";
 import { notesQueryKey, type NoteRecord } from "@/lib/note-types";
 import { useWorkspaceStore } from "@/lib/store";
+import { retryFireAndForget } from "@/lib/retry-fire-and-forget";
 import {
   listNotes,
   getNote as getLocalNote,
@@ -414,7 +415,9 @@ export function useTogglePin() {
         await setLocalNote({ ...existing, pinned, editedAt: new Date().toISOString() });
       })();
       if (useWorkspaceStore.getState().syncEnabled) {
-        setNoteFlagsAction({ noteId: note.id, pinned, archived: note.archived }).catch(() => {});
+        void retryFireAndForget(() =>
+          setNoteFlagsAction({ noteId: note.id, pinned, archived: note.archived }),
+        );
       }
     },
     [updateNote],
