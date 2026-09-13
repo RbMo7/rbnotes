@@ -32,6 +32,7 @@ import { useNotesQuery, useNotesMutations, useTogglePin } from "@/lib/notes-quer
 import { createShareAction, getShareInfoAction, revokeShareAction } from "@/server/actions/shares";
 import { persistSettings } from "@/lib/save-settings";
 import { useSignOut } from "@/lib/use-sign-out";
+import { maybeShowMouseNudge } from "@/lib/mouse-nudge";
 import type { Settings } from "@/lib/schemas";
 
 /**
@@ -358,7 +359,11 @@ export function WorkspaceBuffer() {
             {mode === "INSERT" && (
               <div className="absolute -top-12 left-1/4 w-96 h-28 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
             )}
-            <div className="relative h-full select-text" style={cold ? { visibility: "hidden" } : undefined}>
+            <div
+              className="relative h-full select-text"
+              style={cold ? { visibility: "hidden" } : undefined}
+              onMouseDown={vimEnabled ? () => maybeShowMouseNudge(showNotify) : undefined}
+            >
               <Editor
                 ref={editorRef}
                 noteId={activeNoteId}
